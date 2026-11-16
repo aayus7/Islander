@@ -1,0 +1,16 @@
+# Island AI relay — keeps the Gemini API key on the server so users never need one.
+# Deploy:  npx wrangler kv namespace create LIMITS   (paste the id below)
+#          npx wrangler secret put GEMINI_API_KEY
+#          npx wrangler deploy
+name = "island-ai-relay"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+
+[vars]
+MODEL = "gemini-flash-lite-latest"
+DAILY_LIMIT_PER_DEVICE = "50"   # questions per install per day
+GLOBAL_DAILY_LIMIT = "20000"    # hard ceiling for everyone combined (protects your bill)
+
+[[kv_namespaces]]
+binding = "LIMITS"
+id = "PASTE_KV_NAMESPACE_ID_HERE"

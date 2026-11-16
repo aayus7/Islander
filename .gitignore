@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-preview
+src-tauri/target
+src-tauri/gen
+_incoming*.tar
+_incoming*.done
+_repo.tar
+_backup_*
+harness/
+harness.html
+*.log

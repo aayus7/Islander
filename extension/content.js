@@ -1,4 +1,4 @@
-// Island Media Bridge — content script.
+// Islander Media Bridge — content script.
 // Reads the real <video>/<audio> element on the page (exact time, length, play state)
 // plus the page's media metadata, and reports it to the extension's background script.
 // Also carries out play/pause/seek/next/prev commands coming back from the island.

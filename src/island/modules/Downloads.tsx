@@ -1,4 +1,4 @@
-// Live progress for browser downloads (reported by the Island browser extension):
+// Live progress for browser downloads (reported by the Islander browser extension):
 // a compact pill with a progress ring while collapsed, and a "Downloaded" banner.
 import { useEffect, useRef, useState } from "react";
 import { on } from "../../lib/native";

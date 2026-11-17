@@ -327,7 +327,7 @@ fn main() {
             #[cfg(windows)]
             win::close_other_instances();
             if shelf::shelf_elevated() {
-                eprintln!("NOTE: Island is running as administrator. Windows blocks dragging files from Explorer onto admin apps, so the Shelf can't receive drops. Start it without admin rights.");
+                eprintln!("NOTE: Islander is running as administrator. Windows blocks dragging files from Explorer onto admin apps, so the Shelf can't receive drops. Start it without admin rights.");
             }
             let path = app.path().app_config_dir().ok().map(|d| d.join("settings.json"));
             let state: St = Arc::new(AppState {
@@ -638,7 +638,7 @@ fn build_context_menu(app: &AppHandle, win: &WebviewWindow, s: &Settings) -> tau
         .text("hide", hide_label)
         .text("settings", "Settings…")
         .separator()
-        .text("quit", "Quit Island")
+        .text("quit", "Quit Islander")
         .build()
 }
 
@@ -690,7 +690,7 @@ fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
     }
     // Same frontend; it renders the settings page because the window label is "settings".
     WebviewWindowBuilder::new(app, "settings", WebviewUrl::default())
-        .title("Island Settings")
+        .title("Islander Settings")
         .inner_size(480.0, 700.0)
         .min_inner_size(420.0, 520.0)
         .background_color(tauri::window::Color(0, 0, 0, 255))

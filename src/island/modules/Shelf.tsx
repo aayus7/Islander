@@ -121,7 +121,7 @@ export function ShelfPanel({ width, height, dragging }: { width: number; height:
         </AnimatePresence>
         {items.length === 0 && !dragging ? (
           elevated ? (
-            <Empty icon={<Glyph.tray />} title="Drops are blocked" sub="Island is running as administrator, and Windows blocks drag-and-drop into admin apps. Restart it normally." />
+            <Empty icon={<Glyph.tray />} title="Drops are blocked" sub="Islander is running as administrator, and Windows blocks drag-and-drop into admin apps. Restart it normally." />
           ) : (
             <Empty icon={<Glyph.tray />} title="Drop files here" sub="Stash files, folders or images, then drag them out anywhere." />
           )

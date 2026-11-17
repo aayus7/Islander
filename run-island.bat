@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title Island - setup and run
+title Islander - setup and run
 cd /d "%~dp0"
 
 rem Re-open inside "cmd /k" so the window never closes on its own, even on errors.
@@ -10,7 +10,7 @@ exit /b
 :main
 
 echo ==================================================
-echo   Island - installs what's missing, then runs it
+echo   Islander - installs what's missing, then runs it
 echo   (safe to run again any time)
 echo ==================================================
 echo.
@@ -72,8 +72,8 @@ if errorlevel 1 goto :fail
 :havemods
 echo [4/4] Packages OK
 echo.
-echo Starting the island. The FIRST start compiles everything and can take 3-8 minutes.
-echo Later starts take a few seconds. Close this window to quit the island.
+echo Starting Islander. The FIRST start compiles everything and can take 3-8 minutes.
+echo Later starts take a few seconds. Close this window to quit Islander.
 echo.
 call npm run tauri dev
 if errorlevel 1 goto :fail

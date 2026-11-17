@@ -22,7 +22,7 @@ export function SettingsPage() {
 
   return (
     <div className="sp">
-      <h1>Island</h1>
+      <h1>Islander</h1>
 
       <Group title="Behaviour">
         <Row label="Expand on hover" hint="Off: click the island to open it">
@@ -81,7 +81,7 @@ export function SettingsPage() {
         >
           <Switch on={s.notifications} onChange={(v) => update({ notifications: v })} />
         </Row>
-        <Row label="Do Not Disturb" hint="Island only: no banners (timers still ring)">
+        <Row label="Do Not Disturb" hint="Islander only: no banners (timers still ring)">
           <Switch on={s.dnd} onChange={(v) => update({ dnd: v })} />
         </Row>
         <Row label="Clipboard history" hint="Keeps your recent copies on this PC. Password managers are skipped.">

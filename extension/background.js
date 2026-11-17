@@ -1,4 +1,4 @@
-// Island Media Bridge — background script.
+// Islander Media Bridge — background script.
 // Collects what every tab is playing and streams it to the island over a local
 // WebSocket (ws://127.0.0.1:47823). Commands from the island go back to the right tab.
 // Runs as a service worker in Chrome/Edge and as a background script in Firefox.

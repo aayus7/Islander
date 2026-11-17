@@ -1,4 +1,4 @@
-//! Bridge for the "Island Media Bridge" browser extension.
+//! Bridge for the "Islander Media Bridge" browser extension.
 //!
 //! The extension reads the real <video>/<audio> elements in your tabs (exact time,
 //! length, play state, thumbnail) and streams them here over a local WebSocket:

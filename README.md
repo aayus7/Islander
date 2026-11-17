@@ -1,4 +1,4 @@
-# Island — a Dynamic Island for Windows
+# Islander — a Dynamic Island for Windows
 
 An iPhone-style Dynamic Island for Windows 10/11 that lives at the top of your screen: live media, timers,
 notifications, a file shelf, clipboard history, system stats, quick controls and an AI "Search or Ask"
@@ -105,7 +105,7 @@ animation styles and speed, no Windows needed.
 ## Project layout
 ```
 src/
-  island/Island.tsx        shape, springs, modes, tabs, live activities, bubble, rim
+  island/Island.tsx          shape, springs, modes, tabs, live activities, bubble, rim
   island/content.tsx       Now Playing (compact & expanded), output picker
   island/AiPanel.tsx       Search or Ask
   island/Glass.tsx         WebGL liquid glass

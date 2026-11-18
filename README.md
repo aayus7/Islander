@@ -136,6 +136,22 @@ Everything runs locally. Clipboard history and shelf lists are stored on your PC
 The only network calls are weather (Open-Meteo), the AI request (Gemini, or your relay) and
 website favicons for pinned URLs.
 
+### Islander Media Bridge (browser extension)
+The browser extension exists only to connect your browser to the Islander app on the same PC.
+
+- **What it reads:** for the tab that's playing audio or video, the media title, artist,
+  artwork and playback position (from the page's own player / Media Session), whether it's a
+  live stream, and the progress of your current downloads.
+- **Where it goes:** only to the Islander app on your own computer, over a local connection
+  (`ws://127.0.0.1:47823`). Nothing is sent to any server, ours or anyone else's.
+- **What it does with it:** shows it in the island and carries out the play / pause / skip /
+  seek buttons you press there.
+- **What it never does:** it doesn't store your browsing, read page content beyond the media
+  player, collect personal information, use analytics or ads, or sell or share any data.
+
+Removing the extension (or closing Islander) stops all of this immediately. Questions:
+open an issue at https://github.com/aayus7/Islander/issues.
+
 ## Fonts
 The UI uses SF Pro if it's installed, otherwise Inter, otherwise Segoe UI. SF Pro's licence only covers
 Apple platforms, so don't bundle it in anything you distribute.

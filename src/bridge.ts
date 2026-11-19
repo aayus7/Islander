@@ -115,7 +115,13 @@ const tauriBridge: Bridge = {
     invoke("media_refresh").catch(console.error);
     return un;
   },
-  onHover: (cb) => wrapUnlisten(listen<boolean>("island://hover", (e) => cb(e.payload))),
+  onHover: (cb) => {
+    const off = wrapUnlisten(listen<boolean>("island://hover", (e) => cb(e.payload)));
+    // The cursor may already be on the island (it starts under the mouse, or the page
+    // reloaded): catch up with the current state instead of waiting for the next change.
+    invoke<boolean>("hover_state").then((h) => h && cb(true)).catch(() => {});
+    return off;
+  },
   onAudio: (cb) => wrapUnlisten(listen<number[]>("audio://levels", (e) => cb(e.payload))),
   mediaCommand(id, action) {
     invoke("media_command", { id, action }).catch(console.error);
@@ -170,10 +176,18 @@ const mockBridge: Bridge = {
   isNative: false,
   windowLabel: typeof location !== "undefined" && location.hash === "#settings" ? "settings" : "island",
   onMedia: (cb) => mock.subscribe(cb),
-  onHover: () => () => {},
+  // The preview has no native hit-test; the showcase stage plays that part on its demo bus.
+  onHover: (cb) => {
+    let off = () => {};
+    void import("./lib/native").then((n) => (off = n.on<boolean>("island://hover", cb)));
+    return () => off();
+  },
   onAudio: (cb) => mock.subscribeAudio(cb),
   mediaCommand: (id, action) => mock.command(id, action),
-  setHitRects: () => {},
+  // Kept for the showcase stage, which hit-tests like the native side does.
+  setHitRects: (island, bubble) => {
+    (window as unknown as { __hitRects: unknown }).__hitRects = { island, bubble };
+  },
   setHold: () => {},
   getSettings: () => Promise.resolve(mockSettings),
   updateSettings: (patch) => setMockSettings({ ...mockSettings, ...patch }),

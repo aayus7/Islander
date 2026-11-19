@@ -1,7 +1,7 @@
 // Controls: Windows Quick Settings, built like iOS Control Center.
 //
 //  ┌ (Wi-Fi) Wi-Fi ───── › ┐ ┌──┐ ┌──┐
-//  │         BELL508       │ │  │ │  │   tall iOS sliders:
+//  │      Studio Wi-Fi     │ │  │ │  │   tall iOS sliders:
 //  ├ (BT)  Bluetooth ──── › ┤ │██│ │██│   brightness, volume
 //  └         Jet           ┘ └☀─┘ └🔊┘
 //   ✈  ☾  ◐  ⌗  🔒  ☾z  ▦                 round toggles
@@ -12,6 +12,7 @@
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
 import { cancelCountdown, startRecording, stopRecording, useScreenRec } from "../../lib/screenrec";
 import { RecordGlyph } from "./ScreenRec";
+import { gestureOf } from "../../lib/wheel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { call, on, send } from "../../lib/native";
 import { persistent, uid, useStore } from "../../lib/persist";
@@ -67,9 +68,9 @@ interface BtState {
 const MOCK_WIFI: WifiState = {
   available: true,
   on: true,
-  connected: "BELL508",
+  connected: "Studio Wi-Fi",
   networks: [
-    { ssid: "BELL508", bars: 4, secure: true, connected: true, saved: true },
+    { ssid: "Studio Wi-Fi", bars: 4, secure: true, connected: true, saved: true },
     { ssid: "Home-5G", bars: 3, secure: true, connected: false, saved: false },
     { ssid: "Starbucks WiFi", bars: 2, secure: false, connected: false, saved: false },
     { ssid: "TP-Link_7C21", bars: 1, secure: true, connected: false, saved: false },
@@ -435,6 +436,8 @@ function VSlider({ value, onChange, onCommit, icon, disabled, title }: { value: 
     animate(lean, 0, { ...JELLY, velocity: lean.getVelocity() });
     animate(press, 0, { type: "spring", stiffness: 420, damping: 24 });
   };
+  /** Touchpad scrolling: where this swipe has moved the slider to, so the movement adds up. */
+  const swipe = useRef<{ id: number; v: number; bumped: boolean; commit: number } | null>(null);
   /** A little "boing" when the wheel pushes past an end. */
   const bump = (top: boolean) => {
     originY.set(top ? 1 : 0);
@@ -488,8 +491,29 @@ function VSlider({ value, onChange, onCommit, icon, disabled, title }: { value: 
         release();
       }}
       onWheel={(e) => {
+        const g = gestureOf(e);
+        // A sideways touchpad swipe is for changing tabs, not for the slider.
+        if (g.touchpad && Math.abs(g.sx) > Math.abs(g.sy)) return;
         e.stopPropagation();
         if (disabled) return;
+        if (g.touchpad) {
+          // Follow the fingers: sliding the full height of the slider goes 0 → 100%.
+          // (One step per event, like the wheel, would race to the end in a short swipe.)
+          const s = swipe.current?.id === g.id ? swipe.current : (swipe.current = { id: g.id, v: pct, bumped: false, commit: 0 });
+          const h = ref.current?.clientHeight || 120;
+          const raw = s.v - g.dy / h;
+          const v = Math.min(1, Math.max(0, raw));
+          if ((raw > 1 || raw < 0) && !s.bumped) {
+            s.bumped = true;
+            bump(raw > 1);
+          }
+          if (v === s.v) return;
+          s.v = v;
+          onChange(v);
+          window.clearTimeout(s.commit);
+          s.commit = window.setTimeout(() => onCommit?.(v), 180);
+          return;
+        }
         const up = e.deltaY < 0;
         if ((up && pct >= 1) || (!up && pct <= 0)) {
           if (st.get() < 0.05) bump(up);

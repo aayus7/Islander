@@ -161,6 +161,12 @@ export const mock = {
     else sources.push({ id: "VLC", app: "VLC", list: [TRACKS[2]], index: 0, playing: false, position: 30, sampledAt: Date.now() });
     emit();
   },
+  /** Showcase recorder: replace every source (tracks, artwork, who is playing). */
+  stage(list: { id: string; app: string; tracks: typeof TRACKS; index?: number; playing?: boolean; position?: number }[], current?: string | null) {
+    sources.splice(0, sources.length, ...list.map((l) => ({ id: l.id, app: l.app, list: l.tracks, index: l.index ?? 0, playing: l.playing ?? true, position: l.position ?? 0, sampledAt: Date.now() })));
+    currentId = current === undefined ? (list[0]?.id ?? null) : current;
+    emit();
+  },
   hasSecondSource: () => sources.some((s) => s.id === "Chrome"),
   primaryId: () => sources[0]?.id,
 };

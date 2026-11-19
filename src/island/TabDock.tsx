@@ -42,7 +42,7 @@ export function TabDock({
   onSelect(t: ModuleId): void;
   onReorder(order: ModuleId[]): void;
   /** Scrolling over the dock flips tabs, whatever the page above is doing. */
-  onWheel?(dx: number, dy: number): void;
+  onWheel?(e: React.WheelEvent): void;
 }) {
   const [order, setOrder] = useState(tabs);
   const [hover, setHover] = useState<ModuleId | null>(null);
@@ -68,7 +68,7 @@ export function TabDock({
       onPointerLeave={() => setHover(null)}
       onWheel={(e) => {
         e.stopPropagation();
-        onWheel?.(e.deltaX, e.deltaY);
+        onWheel?.(e);
       }}
     >
       <div className="dock" style={{ background: fill, height: DOCK_H }}>
@@ -96,6 +96,7 @@ export function TabDock({
               key={t}
               value={t}
               className="dock-item"
+              data-tab={t}
               style={{ width: ITEM, height: ITEM }}
               whileDrag={{ scale: 1.22, zIndex: 2 }}
               dragElastic={0.12}

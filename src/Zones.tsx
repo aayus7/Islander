@@ -3,7 +3,7 @@
 // drop the island there (Esc cancels).
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { on } from "./lib/native";
+import { on, send } from "./lib/native";
 import type { Dock, DockAlong } from "./settings-types";
 
 type Spot = { dock: Dock; along: DockAlong };
@@ -53,7 +53,7 @@ export function Zones() {
   return (
     <AnimatePresence>
       {shown && (
-        <motion.div className="zones" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+        <motion.div className="zones" onPointerDown={() => send("island_move_place")} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
           {SPOTS.map((sp) => {
             const p = place(sp);
             const on = active?.dock === sp.dock && active?.along === sp.along;

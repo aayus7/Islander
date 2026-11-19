@@ -599,6 +599,8 @@ function Ai() {
         <Row label="Liquid glass" hint="Real refraction of what's behind the panel. Captured on this PC only, never saved or sent.">
           <Switch on={s.aiGlass} onChange={(v) => update({ aiGlass: v })} />
         </Row>
+      </Group>
+      <Group title="Advanced">
         <Row label="Service URL" hint="Leave empty for Islander's free service. Only change this if you run your own relay." stack>
           <TextInput value={s.aiRelayUrl} placeholder="https://…" onChange={(v) => update({ aiRelayUrl: v })} />
         </Row>
@@ -610,7 +612,7 @@ function Ai() {
 function Shortcuts() {
   const { settings: s, update } = useSettings();
   return (
-    <Group footer="Click a shortcut, then press the new keys. Backspace clears it, Esc cancels. Hiding parks the island completely, and the shortcut is the only way back, so keep one set.">
+    <Group footer="Click a shortcut, then press the new keys. Backspace clears it, Esc cancels. Hiding parks the island completely. To bring it back, press the shortcut again or open Islander from the Start menu.">
       <Row label="Search or Ask">
         <HotkeyInput value={s.aiHotkey} onChange={(v) => update({ aiHotkey: v })} />
       </Row>

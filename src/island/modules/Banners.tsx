@@ -23,7 +23,7 @@ export interface BannerData {
   /** A photo/preview attached to the notification (thumbnail on the right). */
   attachment?: string | null;
   /** Glyph + tint for built-in banners (no app icon). */
-  glyph?: "timer" | "focus" | "battery" | "download" | "update" | "record";
+  glyph?: "timer" | "focus" | "battery" | "download" | "update" | "record" | "hidden";
   tint?: string;
   /** Source to activate on click (AppUserModelId) or an island tab to open. */
   aumid?: string;
@@ -45,6 +45,11 @@ const emit = () => listeners.forEach((l) => l());
 export function pushBanner(b: Omit<BannerData, "at" | "ttl"> & { ttl?: number }) {
   if (queue.some((q) => q.id === b.id)) return;
   queue = [...queue, { ttl: 5200, ...b, at: Date.now() }].slice(-6);
+  emit();
+}
+/** Show this one right now, ahead of anything waiting. */
+export function pushBannerNow(b: Omit<BannerData, "at" | "ttl"> & { ttl?: number }) {
+  queue = [{ ttl: 5200, ...b, at: Date.now() }, ...queue.filter((q) => q.id !== b.id).map((q) => ({ ...q, at: Date.now() }))].slice(0, 6);
   emit();
 }
 export function dismissBanner(id: string) {
@@ -133,7 +138,8 @@ export function useBanners() {
   }, []);
 
   // Do Not Disturb hides everything except the user's own timer.
-  return settings.dnd ? q.filter((b) => b.glyph === "timer" || b.glyph === "focus") : q;
+  // (and the island telling you how to bring it back before it hides).
+  return settings.dnd ? q.filter((b) => b.glyph === "timer" || b.glyph === "focus" || b.glyph === "hidden") : q;
 }
 
 /* ---- view ---- */
@@ -199,6 +205,10 @@ export function Banner({ banner, width }: { banner: BannerData; width: number })
           <span style={{ color: "#fff", display: "flex" }}>
             <RecordGlyph size={22} dot="#ff3b30" />
           </span>
+        ) : banner.glyph === "hidden" ? (
+          <span style={{ color: "#fff", display: "flex" }}>
+            <HiddenGlyph />
+          </span>
         ) : banner.glyph === "download" ? (
           <span style={{ color: "#fff", display: "flex" }}>
             <ArrowDown size={22} />
@@ -225,6 +235,17 @@ export function Banner({ banner, width }: { banner: BannerData; width: number })
         </span>
       )}
     </motion.div>
+  );
+}
+
+/** An eye with a slash: the island is going away (and how to get it back). */
+function HiddenGlyph() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+      <path d="M4 20 20 4" />
+    </svg>
   );
 }
 

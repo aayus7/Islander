@@ -439,11 +439,29 @@ mod imp {
         std::thread::spawn(publish_bt);
     }
 
+    /// A device's display name: Windows' friendly name first, then its own. Names that are
+    /// just "Bluetooth" + an address (unnamed LE halves of a device) are dropped.
+    fn friendly_name(info: Option<HSTRING>, own: Option<HSTRING>) -> String {
+        let generic = |n: &str| {
+            let n = n.trim();
+            n.is_empty() || (n.starts_with("Bluetooth ") && n[10..].chars().all(|c| c.is_ascii_hexdigit() || c == ':'))
+        };
+        for n in [info, own].into_iter().flatten() {
+            let n = n.to_string();
+            if !generic(&n) {
+                return n.trim().to_string();
+            }
+        }
+        String::new()
+    }
+
     /// Picks up newly paired / removed devices and subscribes to their connection events.
     fn enumerate_bt() {
         let mut found: Vec<String> = Vec::new();
         let mut fresh: Vec<Entry> = Vec::new();
-        let known: Vec<String> = ENTRIES.lock().map(|g| g.iter().map(|e| e.id.clone()).collect()).unwrap_or_default();
+        // Devices we already hold open. Placeholders (listed by name only, because Windows
+        // couldn't open them yet, e.g. Bluetooth was off) are tried again every round.
+        let known: Vec<String> = ENTRIES.lock().map(|g| g.iter().filter(|e| e.classic.is_some() || e.le.is_some()).map(|e| e.id.clone()).collect()).unwrap_or_default();
         if let Ok(sel) = BluetoothDevice::GetDeviceSelectorFromPairingState(true) {
             if let Ok(infos) = DeviceInformation::FindAllAsyncAqsFilter(&sel).and_then(|op| op.get()) {
                 for info in infos {
@@ -453,8 +471,16 @@ mod imp {
                     if known.contains(&id_s) {
                         continue;
                     }
-                    let Ok(d) = BluetoothDevice::FromIdAsync(&id).and_then(|op| op.get()) else { continue };
-                    let name = d.Name().map(|n| n.to_string()).unwrap_or_default();
+                    let Ok(d) = BluetoothDevice::FromIdAsync(&id).and_then(|op| op.get()) else {
+                        let name = friendly_name(info.Name().ok(), None);
+                        if !name.is_empty() {
+                            let audio = kind_of(&name, false) == "headphones";
+                            fresh.push(Entry { id: id_s, kind: kind_of(&name, audio).into(), name, audio, classic: None, le: None });
+                        }
+                        continue;
+                    };
+                    // The name Windows' Settings shows; the device's own name can be a bare address.
+                    let name = friendly_name(info.Name().ok(), d.Name().ok());
                     if name.is_empty() {
                         continue;
                     }
@@ -485,8 +511,14 @@ mod imp {
                     if known.contains(&id_s) {
                         continue;
                     }
-                    let Ok(d) = BluetoothLEDevice::FromIdAsync(&id).and_then(|op| op.get()) else { continue };
-                    let name = d.Name().map(|n| n.to_string()).unwrap_or_default();
+                    let Ok(d) = BluetoothLEDevice::FromIdAsync(&id).and_then(|op| op.get()) else {
+                        let name = friendly_name(info.Name().ok(), None);
+                        if !name.is_empty() {
+                            fresh.push(Entry { id: id_s, kind: kind_of(&name, false).into(), name, audio: false, classic: None, le: None });
+                        }
+                        continue;
+                    };
+                    let name = friendly_name(info.Name().ok(), d.Name().ok());
                     if name.is_empty() {
                         continue;
                     }
@@ -501,7 +533,14 @@ mod imp {
         }
         if let Ok(mut g) = ENTRIES.lock() {
             g.retain(|e| found.contains(&e.id));
-            g.extend(fresh);
+            for e in fresh {
+                match g.iter_mut().find(|x| x.id == e.id) {
+                    // A placeholder is replaced once the device opens.
+                    Some(x) if x.classic.is_none() && x.le.is_none() => *x = e,
+                    Some(_) => {}
+                    None => g.push(e),
+                }
+            }
         }
     }
 
@@ -546,7 +585,8 @@ mod imp {
 
     pub fn publish_bt() {
         com();
-        let _one_at_a_time = PUBLISH.lock();
+        // One at a time, and never queue behind a publish that's stuck waiting on Windows.
+        let Ok(_one_at_a_time) = PUBLISH.try_lock() else { return };
         let st = compute_bt();
         let now: Vec<String> = st.devices.iter().filter(|d| d.connected).map(|d| d.name.clone()).collect();
         let newly: Vec<BtDevice> = {
@@ -672,11 +712,25 @@ mod imp {
             publish_bt();
             loop {
                 // Events do the real-time work; this only catches newly paired devices
-                // and anything an event might have missed.
+                // and anything an event might have missed. Each round runs on its own thread
+                // and is never waited on for long: a Windows Bluetooth call can hang (e.g. while
+                // the radio switches on), and that used to freeze the device list for good.
                 std::thread::sleep(Duration::from_secs(6));
-                enumerate_bt();
-                publish_bt();
-                publish_airplane();
+                let (tx, rx) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    com();
+                    enumerate_bt();
+                    publish_bt();
+                    publish_airplane();
+                    let _ = tx.send(());
+                });
+                if rx.recv_timeout(Duration::from_secs(15)).is_err() {
+                    crate::log_line("bluetooth: a refresh took over 15 s (Windows didn't answer); trying again".into());
+                    // Forget the radio we hold: a stuck one is looked up fresh next time.
+                    if let Ok(mut g) = BT_RADIO.lock() {
+                        *g = None;
+                    }
+                }
             }
         });
     }

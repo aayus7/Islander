@@ -1,0 +1,16 @@
+html, body { margin: 0; overflow: hidden; background: #05060a; }
+#desktop { position: fixed; inset: 0; background: url("./assets/wallpaper.jpg") center / cover no-repeat; }
+.preview { background: none !important; }
+.preview::before, .panel { display: none !important; }
+#cursor {
+  position: fixed; left: 0; top: 0; z-index: 99999; pointer-events: none;
+  transform-origin: 2px 1.5px; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.45));
+  will-change: transform;
+}
+#cursor.hidden { opacity: 0; }
+.stage-caption {
+  position: fixed; left: 0; right: 0; bottom: 64px; text-align: center; color: #fff; z-index: 5;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif; pointer-events: none;
+}
+.stage-caption h1 { font-size: 46px; font-weight: 650; letter-spacing: -0.03em; margin: 0; }
+.stage-caption p { font-size: 19px; margin: 10px 0 0; color: rgba(255, 255, 255, 0.72); letter-spacing: -0.01em; }

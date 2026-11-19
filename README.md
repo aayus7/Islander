@@ -1,14 +1,114 @@
-# Islander — a Dynamic Island for Windows
+<p align="center">
+  <img src="docs/media/banner.webp" alt="Islander: the Dynamic Island, on Windows" width="880">
+</p>
 
-An iPhone-style Dynamic Island for Windows 10/11: live media, timers, notifications, downloads, a file
-shelf, clipboard history, system stats, Control Center and a "Search or Ask" bar you can type or talk
-to. It tries to match the real iOS island's look and motion as closely as possible.
+<p align="center">
+  <b>The most faithful 1:1 Dynamic Island for Windows 10 and 11.</b><br>
+  Every spring, morph and cover flip from the iPhone, rebuilt for the desktop.
+</p>
 
-Built with **Tauri 2 (Rust)** + **React 19** + **Motion**. Current version: **0.9.1**.
+<p align="center">
+  <a href="https://github.com/aayus7/Islander/releases/latest"><img src="https://img.shields.io/github/v/release/aayus7/Islander?label=Download&style=for-the-badge&color=0a84ff" alt="Download"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-1c1c1e?style=for-the-badge" alt="Windows 10 and 11">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-1c1c1e?style=for-the-badge" alt="GPL-3.0"></a>
+</p>
+
+<p align="center">
+  <img src="docs/media/music.webp" alt="Islander playing Spotify: hover to expand, scrub, switch sources" width="880">
+</p>
+
+Islander puts a living Dynamic Island at the top of your screen. It isn't a look-alike: the shape is
+the same continuous-curvature squircle, the motion uses the same spring physics as iOS, and every
+transition (expanding, splitting, the album cover turning on a skip) is rebuilt frame by frame to
+match the iPhone. It runs quietly as a transparent overlay, never steals focus, and gets out of the
+way for fullscreen games and video.
+
+<p align="center"><a href="https://github.com/aayus7/Islander/releases/latest"><b>Download Islander</b></a> · free and open source</p>
 
 ---
 
-## Features
+## Now Playing
+
+Media from every app (Spotify, YouTube in your browser, mpv, Stremio and more) with real album art,
+a waveform that follows the actual audio, a draggable scrubber and one-tap source switching.
+
+<p align="center"><img src="docs/media/music-skip.webp" alt="Skipping tracks: the cover turns like on iPhone" width="880"></p>
+
+Skip a track and the cover turns around its axis, blurs and lands sharp, just like iOS. Tucked away
+as a pill, it keeps the art in view with a soft glow in the album's own colour, and it turns there too.
+
+<p align="center"><img src="docs/media/music-compact.webp" alt="The collapsed music pill with the cover flip and glow" width="640"></p>
+
+## Share with your phone, AirDrop-style
+
+Phones and computers running [LocalSend](https://localsend.org) appear right in the island. Accept
+photos from your phone with one click, watch them arrive, and send files back from the Shelf.
+
+<p align="center"><img src="docs/media/airdrop.webp" alt="Receiving photos from an iPhone, then sending them on from the Shelf" width="880"></p>
+
+## Notifications that feel native
+
+Windows notifications become island banners. Messaging apps like Discord and WhatsApp show the
+sender's profile picture and any image they sent. Swipe one away, or click it to open the app.
+
+<p align="center"><img src="docs/media/discord.webp" alt="Discord messages arriving as island banners with profile pictures" width="880"></p>
+
+## Every download, at a glance
+
+Progress, speed and time left for browser downloads, **Internet Download Manager** and **Mister
+Download Manager**. Hover for the full list, cancel one, or click a finished file to open its folder.
+
+<p align="center"><img src="docs/media/downloads.webp" alt="Two downloads with live progress, then a completion banner" width="880"></p>
+
+## Connected, in 3D
+
+Connect AirPods or Beats and the island plays a 360° animation of your exact model with its battery.
+
+<p align="center"><img src="docs/media/airpods.webp" alt="AirPods Pro connecting with a 3D animation and battery ring" width="640"></p>
+
+## Volume, brightness and the rest
+
+Windows' pop-ups, replaced: volume and brightness bars, a Ring / Silent pill for mute, and Caps Lock.
+
+<p align="center"><img src="docs/media/hud.webp" alt="Volume, mute, brightness and Caps Lock pills" width="640"></p>
+
+## Know when you're on
+
+A green dot while an app uses your camera and an orange one for the microphone, exactly where iOS
+puts them. Open the island and the dot glides out beside it.
+
+<p align="center"><img src="docs/media/privacy.webp" alt="Microphone and camera privacy dots" width="640"></p>
+
+## Weather that moves
+
+Live skies, an hourly strip, a 7-day forecast and the full set of details, in the style of iOS Weather.
+
+<p align="center"><img src="docs/media/weather.webp" alt="The Weather tab with falling snow and forecasts" width="880"></p>
+
+## Live Activities
+
+Start a timer, stopwatch or focus session and it stays with you as a live pill while you work.
+
+<p align="center"><img src="docs/media/timer.webp" alt="Starting a timer that keeps counting as a live pill" width="880"></p>
+
+## Everything, one hover away
+
+Scroll to move between tabs: Search or Ask (with voice), Control Center, calendar, weather, timers,
+notes and to-dos, a file shelf, clipboard history and system stats. Turn off or reorder any of them.
+
+<p align="center"><img src="docs/media/tour.webp" alt="Scrolling through every tab of the island" width="880"></p>
+
+---
+
+## Install
+
+Download `Islander_<version>_x64-setup.exe` from [Releases](https://github.com/aayus7/Islander/releases/latest)
+and run it. Islander updates itself from then on. Right-click the island for Settings.
+
+## All features
+
+<details>
+<summary><b>The full list</b></summary>
 
 ### The island
 - **iOS motion**: Apple-style springs (SwiftUI `response` / `dampingFraction`) that keep their velocity when
@@ -67,6 +167,8 @@ notifications, software updates and more. Every change applies live.
 ### Automatic updates
 Installed copies check for new versions, download them in the background and offer to restart. Updates
 are signed, so only builds made with your signing key are accepted.
+
+</details>
 
 ---
 
@@ -189,7 +291,6 @@ version must share its source under the same license.
 **Name and logo:** the GPL covers the code, not the Islander name or logo. Forks are welcome, but
 please give them a different name and icon so nobody mistakes them for the official Islander.
 
-Download the installer from [Releases](https://github.com/aayus7/Islander/releases/latest).
 
 ## Credits & licences
 - **AirPods & Beats animations**: [AirPodsDesktop](https://github.com/SpriteOvO/AirPodsDesktop) by

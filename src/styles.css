@@ -700,7 +700,7 @@ button { font: inherit; color: inherit; }
 .cc-dev-sub.on { color: #0a84ff; font-weight: 500; }
 .cc-dev-bat { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--label2); font-variant-numeric: tabular-nums; }
 .cc-expand { overflow: hidden; }
-.cc-expand-row { display: flex; align-items: center; gap: 8px; padding: 2px 10px 10px 34px; justify-content: space-between; }
+.cc-expand-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px 10px 34px; justify-content: space-between; }
 .cc-expand-note { font-size: 12.5px; color: var(--label2); }
 .cc-input-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
 .cc-input { flex: 1; min-width: 0; height: 32px; border: 0; outline: none; border-radius: 10px; padding: 0 34px 0 11px; background: rgba(118, 118, 128, 0.24); color: #fff; font: inherit; font-size: 13.5px; caret-color: #0a84ff; user-select: text; box-shadow: inset 0 0 0 1px transparent; transition: box-shadow 0.18s; }
@@ -846,7 +846,7 @@ button { font: inherit; color: inherit; }
 .sheet-actions { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .sheet-actions::-webkit-scrollbar { display: none; }
 /* nearby devices: one row that slides sideways, so more devices never push actions out */
-.sheet-send { display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 0 12px; mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 22px), transparent 100%); }
+.sheet-send { display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 0 12px; }
 .sheet-send::-webkit-scrollbar { display: none; }
 .sheet-send > .sheet-btn { flex-shrink: 0; max-width: 240px; }
 .sheet-btn {
@@ -1080,3 +1080,27 @@ button { font: inherit; color: inherit; }
 .rec-btn.stop:hover { background: #ff554b; }
 .rec-btn:disabled { opacity: 0.4; cursor: default; }
 .rec-btn.wide { width: auto; padding: 0 18px; border-radius: 23px; font-size: 14px; font-weight: 600; }
+
+/* Rows that scroll sideways fade out at whichever edge has more to see, so cut-off items
+   read as "scroll for more" instead of looking broken. Driven by the row's own scroll
+   position; a row that fits gets no fade at all. */
+@property --fade-l { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --fade-r { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes edge-fade {
+  0% { --fade-l: 0px; --fade-r: 26px; }
+  6%, 94% { --fade-l: 22px; --fade-r: 26px; }
+  100% { --fade-l: 22px; --fade-r: 0px; }
+}
+.nb-list, .chips, .shelf-strip, .launcher-row, .wxp-hours, .send-strip, .sheet-send {
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+  animation: edge-fade linear both;
+  animation-timeline: scroll(self inline);
+}
+
+/* Compact Now Playing: glow behind the album art. */
+.cmp-glow-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.cmp-glow-wrap > :not(.cmp-glow) { position: relative; }
+.cmp-glow { position: absolute; inset: -2px; border-radius: 9px; filter: blur(7px); pointer-events: none; }
+
+/* Edge/WebView2 adds its own reveal (eye) and clear (x) buttons to inputs; Islander has its own. */
+input::-ms-reveal, input::-ms-clear { display: none; }

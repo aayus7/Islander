@@ -107,6 +107,14 @@ async fn media_command(id: String, action: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?
 }
 
+/// Is the cursor over the island right now? (The island asks when it loads: the hover
+/// may have started before it was listening, e.g. right after startup.)
+static HOVERING: AtomicBool = AtomicBool::new(false);
+#[tauri::command]
+fn hover_state() -> bool {
+    HOVERING.load(Ordering::Relaxed)
+}
+
 /// While held, the island stays open and clickable even if the cursor leaves it.
 #[tauri::command]
 fn set_hold(state: tauri::State<'_, St>, hold: bool) {
@@ -116,7 +124,7 @@ fn set_hold(state: tauri::State<'_, St>, hold: bool) {
 /// Open the AI panel: show the island, let it take keyboard focus, tell the UI.
 fn open_ai(app: &AppHandle, state: &St) {
     if state.hidden.load(Ordering::Relaxed) {
-        set_island_hidden(app, state, false);
+        set_island_hidden(app, state, false, "Search or Ask shortcut");
     }
     set_ai_focus(app, state, true);
     let _ = app.emit("ai://open", ());
@@ -269,7 +277,7 @@ fn stats_watch(on: bool) {
 
 #[tauri::command]
 fn set_hidden(app: AppHandle, state: tauri::State<'_, St>, hidden: bool) {
-    set_island_hidden(&app, &state, hidden);
+    set_island_hidden(&app, &state, hidden, "settings");
 }
 
 /* ------------------------------------------------------------------- main */
@@ -294,9 +302,14 @@ fn main() {
     }));
     let builder = tauri::Builder::default();
     // Release: one Islander at a time. Opening it again (Start menu, desktop shortcut)
-    // brings up Settings in the copy that's already running, like any desktop app.
+    // brings up Settings in the copy that's already running, like any desktop app, and
+    // brings the island back if it was hidden (there's no tray icon to do that from).
     #[cfg(not(debug_assertions))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        let state = app.state::<St>();
+        if state.hidden.load(Ordering::Relaxed) {
+            set_island_hidden(app, &state, false, "Islander opened again");
+        }
         let _ = open_settings_window(app);
     }));
     builder
@@ -314,7 +327,7 @@ fn main() {
                         open_ai(app, &state);
                     } else if is(&s.hide_hotkey) {
                         let hidden = state.hidden.load(Ordering::Relaxed);
-                        set_island_hidden(app, &state, !hidden);
+                        set_island_hidden(app, &state, !hidden, "hide shortcut");
                     }
                 })
                 .build(),
@@ -358,6 +371,7 @@ fn main() {
             media_command,
             media_refresh,
             set_hold,
+            hover_state,
             ui_log,
             list_outputs,
             set_output,
@@ -387,6 +401,7 @@ fn main() {
             dlmgr::download_cancel,
             posters::movie_poster,
             island_move_start,
+            island_move_place,
             island_move_anchor,
             updater::update_check,
             updater::update_status,
@@ -552,12 +567,35 @@ fn register_hotkey(app: &AppHandle, old: &str, new: &str) {
     }
 }
 
-fn set_island_hidden(app: &AppHandle, state: &St, hidden: bool) {
-    state.hidden.store(hidden, Ordering::Relaxed);
+fn set_island_hidden(app: &AppHandle, state: &St, hidden: bool, why: &str) {
+    let was = state.hidden.swap(hidden, Ordering::Relaxed);
+    if was != hidden {
+        log_line(format!("island {} ({why})", if hidden { "hidden" } else { "shown" }));
+    }
     if let Some(win) = app.get_webview_window("island") {
         if hidden {
+            HOVERING.store(false, Ordering::Relaxed);
             let _ = app.emit("island://hover", false);
-            let _ = win.hide();
+            let _ = win.set_ignore_cursor_events(true);
+            if was {
+                let _ = win.hide();
+            } else {
+                // Say it before going: a hidden island leaves nothing on screen, so without this
+                // a stray shortcut press looks like the app vanished. The island shows how to
+                // bring it back, then parks itself (unless it was brought back meanwhile).
+                let hotkey = state.store.get().hide_hotkey;
+                let _ = app.emit("island://hiding", hotkey);
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(HIDE_NOTICE_MS));
+                    let state = app.state::<St>();
+                    if state.hidden.load(Ordering::Relaxed) {
+                        if let Some(win) = app.get_webview_window("island") {
+                            let _ = win.hide();
+                        }
+                    }
+                });
+            }
         } else {
             let _ = win.set_ignore_cursor_events(true);
             let _ = win.show();
@@ -565,6 +603,9 @@ fn set_island_hidden(app: &AppHandle, state: &St, hidden: bool) {
     }
     let _ = app.emit("island://hidden", hidden);
 }
+
+/// How long the island shows "hidden — press … to bring it back" before it goes.
+const HIDE_NOTICE_MS: u64 = 2600;
 
 /* ------------------------------------------------------------- placement */
 
@@ -595,7 +636,12 @@ fn place_island(win: &WebviewWindow, state: &St, s: &Settings, follow: Option<Mo
     let (w, h) = (WIN_W * s.size_scale, WIN_H * s.size_scale);
     win.set_size(LogicalSize::new(w, h))?;
     let _ = scale;
-    win.set_position(dock_position(&mon, s))?;
+    let pos = dock_position(&mon, s);
+    win.set_position(pos)?;
+    log_line(format!(
+        "place: dock {} {} on {:?} ({}x{} at {},{}; setting {:?}, offset {},{}) -> window at {},{}",
+        s.dock, s.dock_along, mon.name(), mon.size().width, mon.size().height, mon.position().x, mon.position().y, s.monitor, s.offset_x, s.offset_y, pos.x, pos.y
+    ));
     *state.monitor_key.lock().unwrap() = monitor_key(&mon);
     Ok(())
 }
@@ -644,6 +690,15 @@ fn island_move_anchor(x: f64, y: f64) {
 
 /// `click`: from the menu — follow the mouse until the next click. Otherwise (press and
 /// hold) until the button is released.
+/// Set when the drop-zone layer (or the island) is clicked while placing by click. A quick
+/// tap — a touchpad tap-to-click especially — can come and go between two polls of the
+/// mouse button, so the click itself tells us.
+static PLACE_NOW: AtomicBool = AtomicBool::new(false);
+#[tauri::command]
+fn island_move_place() {
+    PLACE_NOW.store(true, Ordering::SeqCst);
+}
+
 #[tauri::command]
 fn island_move_start(app: AppHandle, click: bool) {
     start_move(&app, click);
@@ -735,6 +790,11 @@ fn run_move(app: &AppHandle, click: bool) {
     let mut scale = win.scale_factor().unwrap_or(1.0);
     let mut prev = Instant::now();
     let t0 = prev;
+    // Forget the click that started this (choosing Move Island…), so only a new one places it.
+    unsafe {
+        let _ = GetAsyncKeyState(VK_LBUTTON.0 as i32);
+    }
+    PLACE_NOW.store(false, Ordering::SeqCst);
     loop {
         std::thread::sleep(Duration::from_millis(6));
         let dt = prev.elapsed().as_secs_f64().clamp(0.001, 0.05);
@@ -744,10 +804,16 @@ fn run_move(app: &AppHandle, click: bool) {
             break;
         }
         let down = pressed(VK_LBUTTON);
+        // Bit 0: pressed since the last check, so a click quicker than our 6 ms poll still counts.
+        let tapped = unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 1 != 0 };
         if click {
-            if down {
+            if PLACE_NOW.swap(false, Ordering::SeqCst) {
+                break;
+            }
+            if down || tapped {
                 seen_down = true;
-            } else if seen_down {
+            }
+            if !down && seen_down {
                 break;
             }
         } else if !down {
@@ -774,6 +840,9 @@ fn run_move(app: &AppHandle, click: bool) {
             if zones_on.as_deref() != Some(key.as_str()) {
                 let _ = z.set_position(*mon.position());
                 let _ = z.set_size(*mon.size());
+                // Placing by click (Move Island… in the menu or Settings): the layer catches that
+                // click, so it doesn't also click whatever app is under the cursor.
+                let _ = z.set_ignore_cursor_events(!click);
                 let _ = z.show();
                 // Keep the island above its own drop zones.
                 win::stack_above(&win, Some(z));
@@ -789,6 +858,7 @@ fn run_move(app: &AppHandle, click: bool) {
     }
     if let Some(z) = &zones {
         let _ = z.hide();
+        let _ = z.set_ignore_cursor_events(true);
     }
     // Where the window goes: the chosen spot, or back where it was (Esc).
     let (old, new, to) = match last.filter(|_| !cancelled) {
@@ -842,6 +912,7 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
         let mut interactive = false;
         let mut hovering = false;
         let mut tick: u32 = 0;
+        let mut last_where: Option<(i32, i32, bool)> = None;
         // Hidden because a fullscreen app is in front (not the user's own "hide").
         let mut fs_hidden = false;
         // A change must be seen twice in a row (~1 s) before acting, so brief focus
@@ -861,6 +932,7 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                         fs_hidden = want;
                         eprintln!("[island] {} [{}]", if want { "hiding: a fullscreen app is in front" } else { "back: fullscreen app closed" }, win::fullscreen_why());
                         if want {
+                            HOVERING.store(false, Ordering::Relaxed);
                             let _ = app.emit("island://hover", false);
                             let _ = win.hide();
                         } else {
@@ -872,11 +944,13 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
             if fs_hidden {
                 interactive = false;
                 hovering = false;
+                HOVERING.store(false, Ordering::Relaxed);
                 continue;
             }
             if state.hidden.load(Ordering::Relaxed) {
                 interactive = false;
                 hovering = false;
+                HOVERING.store(false, Ordering::Relaxed);
                 std::thread::sleep(Duration::from_millis(100));
                 continue;
             }
@@ -898,6 +972,16 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                 }
             }
 
+            // Where the island window actually is (logged when it changes): lets a "the island
+            // disappeared" report be traced to a position, a display or visibility.
+            if tick % 120 == 0 {
+                let vis = win.is_visible().unwrap_or(false);
+                let key = (origin.x, origin.y, vis);
+                if last_where != Some(key) {
+                    last_where = Some(key);
+                    log_line(format!("island window at {},{} visible={vis}", origin.x, origin.y));
+                }
+            }
             let lx = (cursor.x - origin.x as f64) / scale;
             let ly = (cursor.y - origin.y as f64) / scale;
             let held = state.hold.load(Ordering::Relaxed);
@@ -916,7 +1000,9 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                 )
             };
 
-            let now_interactive = on_island || on_bubble;
+            // While moving, the island is under the cursor the whole time: keep it clickable so
+            // the click that places it (Move Island…) reaches it instead of the app below.
+            let now_interactive = on_island || on_bubble || MOVING.load(Ordering::Relaxed);
             if now_interactive != interactive {
                 interactive = now_interactive;
                 #[cfg(debug_assertions)]
@@ -931,6 +1017,7 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                 hovering = on_island;
                 #[cfg(debug_assertions)]
                 ui_log(format!("hover: {hovering} at {lx:.0},{ly:.0}"));
+                HOVERING.store(hovering, Ordering::Relaxed);
                 let _ = app.emit("island://hover", hovering);
             }
         }
@@ -1018,7 +1105,7 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
             "pin" => json!({ "pinned": !s.pinned }),
             "hover" => json!({ "expandOnHover": !s.expand_on_hover }),
             "hide" => {
-                set_island_hidden(app, &state, true);
+                set_island_hidden(app, &state, true, "right-click menu");
                 return;
             }
             "move" => {

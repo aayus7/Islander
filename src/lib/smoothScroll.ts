@@ -1,3 +1,5 @@
+import { gestureOf, markScrolled } from "./wheel";
+
 // Smooth, eased mouse-wheel scrolling for every scrollable list in the island
 // (Clipboard, Shelf, Wi-Fi, Weather, AI answers…), like macOS/iOS instead of
 // Windows' jumpy 100-px steps. Vertical wheels also glide horizontal strips.
@@ -76,7 +78,11 @@ export function installSmoothScroll(root: Window = window) {
     if (e.ctrlKey || e.shiftKey || e.defaultPrevented) return;
     // The tab dock never scrolls anything.
     if ((e.target as HTMLElement)?.closest?.(".dock-wrap")) return;
-    if (inTabZone(e.target, e.clientY)) {
+    const g = gestureOf(e);
+    // On a touchpad only sideways swipes change tabs, so scrolling up/down over the
+    // tab zone scrolls the page like anywhere else.
+    const padVertical = g.touchpad && Math.abs(g.sy) >= Math.abs(g.sx);
+    if (!padVertical && inTabZone(e.target, e.clientY)) {
       e.preventDefault(); // no native scroll either: this wheel is for tabs
       (e as WheelEvent & { islandTabZone?: boolean }).islandTabZone = true;
       return;
@@ -84,9 +90,9 @@ export function installSmoothScroll(root: Window = window) {
     const unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? 300 : 1;
     let dx = e.deltaX * unit;
     let dy = e.deltaY * unit;
-    // Trackpad: fine-grained deltas — leave it native.
-    const coarse = e.deltaMode !== 0 || Math.abs(dy) >= 50 || Math.abs(dx) >= 50;
-    if (!coarse) return;
+    // Touchpads are already smooth (with momentum): leave them to the browser. Decided
+    // per gesture, so a fast swipe's big events don't suddenly get eased mid-swipe.
+    if (g.touchpad) return;
     const vertical = Math.abs(dy) >= Math.abs(dx);
     // A vertical wheel over a horizontal strip (hourly forecast) inside a vertical
     // page scrolls the page; the strip only takes it when nothing above scrolls.
@@ -100,6 +106,7 @@ export function installSmoothScroll(root: Window = window) {
         const left = dy > 0 ? room - pending : room + pending;
         if (left > 1) {
           e.preventDefault();
+          markScrolled(e);
           glide(el, 0, dy);
           return;
         }
@@ -110,6 +117,7 @@ export function installSmoothScroll(root: Window = window) {
         if (room > 1) {
           if (!vertical) {
             e.preventDefault();
+            markScrolled(e);
             glide(el, dx, 0);
             return;
           }
@@ -120,6 +128,7 @@ export function installSmoothScroll(root: Window = window) {
     }
     if (fallbackX) {
       e.preventDefault();
+      markScrolled(e);
       glide(fallbackX, dy, 0);
     }
   };

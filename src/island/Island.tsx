@@ -15,7 +15,7 @@ import { ShelfPanel, useShelf, useShelfDrop } from "./modules/Shelf";
 import { ClipboardPanel, useClips } from "./modules/Clipboard";
 import { StatsPanel } from "./modules/Stats";
 import { ControlsPanel } from "./modules/Controls";
-import { Banner, useBanners, BANNER_H, pushBanner } from "./modules/Banners";
+import { Banner, useBanners, BANNER_H, pushBanner, pushBannerNow, dismissBanner } from "./modules/Banners";
 import { on, send } from "../lib/native";
 import { Hud, useHud, quietHud, HUD_SIZE, MUTE_SIZE } from "./modules/Hud";
 import { DeviceActivity, PowerActivity, useActivity, DEVICE_SIZE, POWER_SIZE } from "./modules/Devices";
@@ -23,6 +23,7 @@ import { PrivacyDots } from "./modules/Privacy";
 import { DownloadCompact, DownloadMinimal, DownloadsPanel, downloadsPanelHeight, useDownloads } from "./modules/Downloads";
 import { INCOMING_SIZE, IncomingCard, NEARBY_H } from "./modules/Nearby";
 import { useNearby } from "../lib/nearby";
+import { markScrolled, tabStep } from "../lib/wheel";
 import { AiPanel, AI_BAR_H, type AiView } from "./AiPanel";
 import { AiThinking, THINKING_SIZE } from "./AiThinking";
 import { useAiSession } from "../lib/aiSession";
@@ -126,8 +127,12 @@ function islandPath(w: number, h: number, r: number) {
   const rr = Math.max(0, Math.min(r, h / 2, w / 2));
   const d = getSvgPath({ width: w, height: h, cornerRadius: rr, cornerSmoothing: SMOOTHING, preserveSmoothing: true });
   const dx = (FRAME_W - w) / 2;
-  // figma-squircle only uses absolute coords in M/L commands; shift those.
-  return d.replace(/([ML]) (-?[\d.]+) (-?[\d.]+)/g, (_, c, x, y) => `${c} ${(+x + dx).toFixed(3)} ${y}`);
+  // figma-squircle only uses absolute coords in M/L commands; shift those. It also writes
+  // relative arcs as "-${n}", so a value that goes negative mid-spring would read "--n",
+  // which Chromium rejects (that frame's outline is dropped): a double minus is a plus.
+  return d
+    .replace(/--/g, "")
+    .replace(/([ML]) (-?[\d.]+) (-?[\d.]+)/g, (_, c, x, y) => `${c} ${(+x + dx).toFixed(3)} ${y}`);
 }
 
 /**
@@ -202,10 +207,14 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const [lifted, setLifted] = useState(false);
   const pinRef = useRef<() => void>(() => {});
   const dragOnRef = useRef(false);
+  /** True from the moment a hold picks the island up until it's been dropped. */
+  const pickupRef = useRef(false);
+  const aiStickyRef = useRef(false);
   // While moving: the edge under the cursor (the island previews its shape for it).
   const [preview, setPreview] = useState<{ dock: Dock; along: DockAlong } | null>(null);
   useEffect(() => {
     const a = on("move://begin", () => {
+      pickupRef.current = true;
       if (!dragOnRef.current) pinRef.current(); // started from the menu / Settings
       setLifted(true);
     });
@@ -216,6 +225,9 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       setTimeout(() => {
         setLifted(false);
         swallowClick.current = false;
+        pickupRef.current = false;
+        // Picked up from Search or Ask: give it the keyboard back so you can keep typing.
+        if (aiStickyRef.current) bridge.aiFocus(true);
       }, 160);
     });
     return () => {
@@ -247,6 +259,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
    * Shown as the third tab, or "sticky" (stays open, owns the keyboard) once opened by
    * the hotkey / menu or clicked into. Sticky closes with Esc, a click away, or app switch. */
   const [aiSticky, setAiSticky] = useState(false);
+  aiStickyRef.current = aiSticky;
   const [aiH, setAiH] = useState(AI_BAR_H);
   const [aiView, setAiView] = useState<AiView>("search");
   const onAiShape = useCallback((hh: number, v: AiView) => {
@@ -270,8 +283,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   }, []);
   useEffect(() => {
     if (!aiSticky || !bridge.isNative) return;
-    // Click into another app → close, like Spotlight/Siri.
-    const onBlur = () => closeAi();
+    // Click into another app → close, like Spotlight/Siri. Not while the island is being
+    // picked up and moved: showing the drop zones takes focus for a moment, and closing
+    // then collapsed the island in your hand.
+    const onBlur = () => {
+      if (pickupRef.current) return;
+      closeAi();
+    };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
   }, [aiSticky, closeAi]);
@@ -342,19 +360,49 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const [dir, setDir] = useState(1);
   const lastWheel = useRef(0);
   const listWheel = useRef(0);
-  /** One tab left/right per flick (fast wheel spins don't skip several). */
-  const flickTab = (dx: number, dy: number) => {
-    const t = performance.now();
-    if (aiSticky && t - lastWheel.current >= 380 && Math.abs(dy) + Math.abs(dx) >= 4) {
+  /* Picking a tab resizes the island, which can slide the dock out from under the cursor
+   * (a shorter tab pulls it up). Without this the island closed the moment you picked a
+   * shorter tab. Keep it open until the cursor clearly moves on (or 5 s pass). */
+  const tabPickHold = useRef<{ x: number; y: number; timer: number } | null>(null);
+  const lastPress = useRef({ x: 0, y: 0 });
+  const releaseTabPickHold = useCallback(() => {
+    const h = tabPickHold.current;
+    if (!h) return;
+    window.clearTimeout(h.timer);
+    tabPickHold.current = null;
+    // Search or Ask keeps its own hold while you type in it: leave that alone.
+    if (!aiStickyRef.current) bridge.setHold(false);
+  }, []);
+  const holdAfterTabPick = () => {
+    if (tabPickHold.current) window.clearTimeout(tabPickHold.current.timer);
+    bridge.setHold(true);
+    tabPickHold.current = { ...lastPress.current, timer: window.setTimeout(releaseTabPickHold, 5000) };
+  };
+  useEffect(() => {
+    const down = (e: PointerEvent) => (lastPress.current = { x: e.screenX, y: e.screenY });
+    const move = (e: PointerEvent) => {
+      const h = tabPickHold.current;
+      if (h && Math.hypot(e.screenX - h.x, e.screenY - h.y) > 48) releaseTabPickHold();
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointermove", move, true);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointermove", move, true);
+    };
+  }, [releaseTabPickHold]);
+  /** One tab left/right per gesture: a wheel spin or a touchpad swipe (momentum included). */
+  const flickTab = (e: React.WheelEvent | WheelEvent) => {
+    const d = tabStep(e);
+    if (!d) return;
+    lastWheel.current = performance.now();
+    if (aiSticky) {
       // Scrolling away from Search or Ask: let go of the keyboard and switch tabs.
       setAiSticky(false);
       bridge.aiFocus(false);
       bridge.glassStop();
       setHover(true);
     }
-    if (t - lastWheel.current < 380 || Math.abs(dy) + Math.abs(dx) < 4) return;
-    lastWheel.current = t;
-    const d = (Math.abs(dx) > Math.abs(dy) ? dx : dy) > 0 ? 1 : -1;
     const next = TABS[TABS.indexOf(tab) + d];
     if (next) {
       setDir(d);
@@ -365,12 +413,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     if (!expanded && !aiSticky) return;
     // Shift+wheel always changes tabs, even over a list (Weather, Clipboard…).
     if (e.shiftKey) {
-      flickTab(e.deltaX, e.deltaY);
+      flickTab(e);
       return;
     }
     // Lists (clipboard, shelf, Wi-Fi…) scroll first; only at their ends — and only
     // with a fresh flick, not the tail of a scroll — does the wheel change tabs.
     if (scrollInside(e)) {
+      markScrolled(e);
       listWheel.current = performance.now();
       return;
     }
@@ -378,7 +427,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       listWheel.current = performance.now();
       return;
     }
-    flickTab(e.deltaX, e.deltaY);
+    flickTab(e);
   };
   // Opening the island: Media if something is playing, otherwise straight to AI.
   const wasExpanded = useRef(false);
@@ -451,7 +500,9 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   }, [expanded]);
   const primary: "rec" | "media" | "clock" | "download" | null = recOn ? "rec" : session?.playing ? "media" : timerLive ? "clock" : downloading ? "download" : null;
   const mode: Mode =
-    aiSticky
+    banner?.id === "island-hidden"
+      ? "banner"
+    : aiSticky
       ? "ai"
       : incomingReq && !dragging
         ? "incoming"
@@ -495,6 +546,28 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       ),
     [],
   );
+
+  // Hidden from the shortcut or the menu: before it goes, say how to bring it back.
+  useEffect(() => {
+    const offs = [
+      on<string>("island://hiding", (hotkey) =>
+        pushBannerNow({
+          id: "island-hidden",
+          app: "Islander",
+          title: "Island hidden",
+          body: hotkey ? `Press ${hotkey.replace(/\+/g, " + ")} to bring it back` : "Open Islander from the Start menu to bring it back",
+          icon: null,
+          glyph: "hidden",
+          tint: "#3a3a3c",
+          ttl: 2400,
+        }),
+      ),
+      on<boolean>("island://hidden", (hidden) => {
+        if (!hidden) dismissBanner("island-hidden");
+      }),
+    ];
+    return () => offs.forEach((f) => f());
+  }, []);
 
   /* ---- second activity → split bubble ---- */
   const otherMedia = sessions.find((s) => s.playing && s.id !== session?.id) ?? null;
@@ -741,7 +814,8 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     return () => clearTimeout(t);
   }, [settings.moveTipShown]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const glassOn = mode === "ai" && settings.aiGlass;
+  // Paused while the island is being moved: capturing a moving area gives black frames.
+  const glassOn = mode === "ai" && settings.aiGlass && !lifted;
   useEffect(() => {
     if (!glassOn) return;
     const s = sizeScale;
@@ -773,15 +847,30 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const holdAt = useRef<{ x: number; y: number } | null>(null);
   const swallowClick = useRef(false);
   const NO_LIFT = "[data-no-lift], button, input, textarea, select, a, [role=slider], [draggable=true], .dock-wrap, [contenteditable]";
+  // Placing the island by click (Move Island…): a click anywhere on the island's window
+  // places it (the drop-zone layer handles clicks everywhere else).
+  useEffect(() => {
+    if (!lifted) return;
+    const place = () => send("island_move_place");
+    window.addEventListener("pointerdown", place, true);
+    return () => window.removeEventListener("pointerdown", place, true);
+  }, [lifted]);
   const liftDown = (e: React.PointerEvent<HTMLElement>) => {
-    // Works on every page, Search or Ask included (just not while you're typing in it).
-    if (e.button !== 0 || aiSticky || lifted) return;
-    if ((e.target as HTMLElement).closest(NO_LIFT)) return;
+    // Works on every page. On the Search or Ask bar it works even while you're typing:
+    // holding still picks the island up, while a quick drag still selects text (moving
+    // before the hold completes cancels the pick-up).
+    if (e.button !== 0 || lifted) return;
+    const t = e.target as HTMLElement;
+    const onBar = !!t.closest(".ai-bar") && !t.closest("button, a, [data-no-lift]");
+    if (!onBar && (aiSticky || t.closest(NO_LIFT))) return;
     holdAt.current = { x: e.screenX, y: e.screenY };
     clearTimeout(holdTimer.current);
     holdTimer.current = window.setTimeout(() => {
       holdAt.current = null;
       swallowClick.current = true;
+      pickupRef.current = true;
+      // Safety net: a move always ends within 90 s (see run_move), so never stay stuck.
+      window.setTimeout(() => (pickupRef.current = false), 95_000);
       pinForMove();
       setLifted(true);
       send("island_move_start", { click: false });
@@ -800,7 +889,8 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     holdAt.current = null;
   };
 
-  const domHover = bridge.isNative
+  // (The showcase stage hit-tests like the native side, so it opts out of DOM hover too.)
+  const domHover = bridge.isNative || (window as unknown as { __stageHover?: boolean }).__stageHover
     ? {}
     : { onPointerEnter: () => setHoverDelayed(true), onPointerLeave: () => setHoverDelayed(false) };
 
@@ -1040,7 +1130,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
       {/* Tab dock: one icon per tab under the open island (click, hover, drag to rearrange). */}
       <AnimatePresence>
-        {(expanded || aiSticky) && !aiThinking && mode !== "incoming" && TABS.length > 1 && (
+        {(expanded || aiSticky) && !aiThinking && mode !== "incoming" && mode !== "banner" && TABS.length > 1 && (
           <TabDock
             key="dock"
             tabs={TABS}
@@ -1055,13 +1145,14 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                 bridge.glassStop();
                 setHover(true);
               }
+              holdAfterTabPick(); // after aiFocus(false), which also clears the hold
               if (t === tab) return;
               setDir(TABS.indexOf(t) > TABS.indexOf(tab) ? 1 : -1);
               setTab(t);
               tabLock.current = Date.now();
             }}
             onReorder={(order) => update({ modules: order.filter((t): t is ModuleId => t !== "downloads") })}
-            onWheel={(dx, dy) => flickTab(dx, dy)}
+            onWheel={(e) => flickTab(e)}
           />
         )}
       </AnimatePresence>

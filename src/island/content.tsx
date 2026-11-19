@@ -9,11 +9,23 @@ import { Artwork, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, 
 /* ---------- Compact: art on the left, waveform on the right ---------- */
 
 export function MediaCompact({ session, width, height }: { session: MediaSession; width: number; height: number }) {
+  // Track changes while collapsed (media keys, autoplay) turn the cover like the open island.
+  const flipDir = useRef(1);
   // No artwork? Take the colour from the app's own icon (purple for mpv, green for Spotify…).
   const color = useArtColor(session.artwork ?? session.icon ?? null, session.app);
   return (
     <div className="row" style={{ width, height, padding: "0 9px 0 8px", justifyContent: "space-between" }}>
-      <Artwork src={session.artwork} size={23} radius={6.5} />
+      <span className="cmp-glow-wrap">
+        {/* A soft halo in the album's colour, breathing slowly while it plays. */}
+        <motion.span
+          className="cmp-glow"
+          style={{ background: color }}
+          initial={false}
+          animate={session.playing ? { opacity: [0.38, 0.62, 0.38], scale: [0.96, 1.08, 0.96] } : { opacity: 0, scale: 0.9 }}
+          transition={session.playing ? { duration: 3.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.5 }}
+        />
+        <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={23} radius={6.5} />
+      </span>
       <div style={{ paddingRight: 3 }}>
         <Waveform playing={session.playing} color={color} bars={6} height={14} barWidth={2.6} gap={2} />
       </div>
@@ -623,7 +635,7 @@ function Check({ on, color }: { on: boolean; color: string }) {
  * blurring until it's edge-on, then the new cover turns in blurred and sharpens.
  * "Previous" flips the other way.
  */
-function FlipArt({ src, trackKey, dir }: { src: string | null; trackKey: string; dir: React.MutableRefObject<number> }) {
+function FlipArt({ src, trackKey, dir, size = 64, radius = 14 }: { src: string | null; trackKey: string; dir: React.MutableRefObject<number>; size?: number; radius?: number }) {
   const [d, setD] = useState(1);
   const last = useRef(trackKey);
   if (last.current !== trackKey) {
@@ -631,8 +643,10 @@ function FlipArt({ src, trackKey, dir }: { src: string | null; trackKey: string;
     if (d !== dir.current) setD(dir.current);
     dir.current = 1; // changes not started from our buttons count as "next"
   }
+  // Blur and perspective scale with the cover, so the small pill turns the same way.
+  const b = size / 64;
   const variants = {
-    enter: (k: number) => ({ rotateY: -90 * k, filter: "blur(9px)", opacity: 1 }),
+    enter: (k: number) => ({ rotateY: -90 * k, filter: `blur(${9 * b}px)`, opacity: 1 }),
     center: {
       rotateY: 0,
       filter: "blur(0px)",
@@ -643,12 +657,12 @@ function FlipArt({ src, trackKey, dir }: { src: string | null; trackKey: string;
     },
     exit: (k: number) => ({
       rotateY: 90 * k,
-      filter: "blur(7px)",
+      filter: `blur(${7 * b}px)`,
       transition: { duration: 0.24, ease: [0.55, 0, 0.85, 0.4] as const },
     }),
   };
   return (
-    <div style={{ position: "relative", width: 64, height: 64, perspective: 420 }}>
+    <div style={{ position: "relative", width: size, height: size, perspective: 420 * b }}>
       <AnimatePresence initial={false} mode="wait" custom={d}>
         <motion.div
           key={trackKey}
@@ -657,9 +671,9 @@ function FlipArt({ src, trackKey, dir }: { src: string | null; trackKey: string;
           initial="enter"
           animate="center"
           exit="exit"
-          style={{ width: 64, height: 64, transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
+          style={{ width: size, height: size, transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
         >
-          <Artwork src={src} size={64} radius={14} />
+          <Artwork src={src} size={size} radius={radius} />
         </motion.div>
       </AnimatePresence>
     </div>

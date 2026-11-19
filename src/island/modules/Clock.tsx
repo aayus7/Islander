@@ -2,6 +2,7 @@
 // tabular digits, and the round tinted Start/Pause/Cancel buttons.
 import { AnimatePresence, motion } from "motion/react";
 import { useNow } from "../../lib/hooks";
+import { gestureOf, markScrolled } from "../../lib/wheel";
 import { clockActions, display, fmtClock, totalMs, useClock, type ClockKind } from "../../lib/timer";
 import { ModeSwitch, NumericText, Segmented } from "./ui";
 
@@ -126,7 +127,11 @@ const hScroll = {
     const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1 && e.deltaY > 0;
     if (atStart || atEnd) return; // let the island switch tabs at the ends
     e.stopPropagation();
-    el.scrollBy({ left: (Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * 0.8, behavior: "smooth" });
+    markScrolled(e);
+    const d = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    // A touchpad is already smooth: follow it 1:1. Easing every tiny event lags behind.
+    if (gestureOf(e).touchpad) el.scrollLeft += d;
+    else el.scrollBy({ left: d * 0.8, behavior: "smooth" });
   },
   onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const el = e.currentTarget;

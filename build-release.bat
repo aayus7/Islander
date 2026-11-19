@@ -29,18 +29,11 @@ mkdir release
 call node scripts\make-update-feed.mjs
 if errorlevel 1 goto :fail
 copy /y "RELEASE-README.txt" "release\Read Me.txt" >nul
-for /f "delims=" %%v in ('node -p "require('./package.json').version"') do set "VER=%%v"
-rem One click opens a new release on GitHub with the tag and title filled in.
-> "release\Publish %VER% on GitHub.url" (
-  echo [InternetShortcut]
-  echo URL=https://github.com/aayus7/Islander/releases/new?tag=v%VER%^&title=Islander%%20%VER%
-)
 
 echo.
 echo Done! The installer is in the "release" folder.
 echo To ship it as an update to everyone: tell Claude "publish the update",
-echo or open "Publish %VER% on GitHub" in the release folder and attach the installer,
-echo its .sig file and latest.json to the new release (github.com/aayus7/Islander).
+echo or upload everything in "release" to a new GitHub release named v^<version^>.
 explorer "%~dp0release"
 pause
 exit /b

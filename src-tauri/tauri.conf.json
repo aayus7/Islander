@@ -64,7 +64,6 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU4NzM5QUIxQzcxOEVEQUEKUldTcTdSakhzWnB6V05UVnJDeTlSRitoUVZzQVAzYWtMVG90YXFSamhiOHdyT1R5WTNZQk9QNVUK",
       "endpoints": [
-        "https://github.com/aayus7/Islander/releases/latest/download/latest.json",
         "https://github.com/aayus7/islander-releases/releases/latest/download/latest.json"
       ],
       "windows": {

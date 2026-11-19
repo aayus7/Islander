@@ -1,6 +1,6 @@
 // Writes release/latest.json — the update feed Islander checks — from the installer and
 // its signature that `tauri build` just made. Upload latest.json together with the
-// installer to a new GitHub release on aayus7/Islander, and every copy of
+// installer to a new GitHub release (aayus7/islander-releases), and every copy of
 // Islander out there updates itself.
 import { readFileSync, writeFileSync, readdirSync, copyFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -31,7 +31,7 @@ writeFileSync(
       platforms: {
         "windows-x86_64": {
           signature: sig,
-          url: `https://github.com/aayus7/Islander/releases/download/v${v}/${asset}`,
+          url: `https://github.com/aayus7/islander-releases/releases/download/v${v}/${asset}`,
         },
       },
     },

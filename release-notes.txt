@@ -1,16 +1,29 @@
 Islander 0.9.1
 
+New: screen recording
+- Record your screen from Controls, iPhone-style: a 3, 2, 1 countdown, then a red rim around the island while it records.
+- Hover the island to pause, resume or stop. The recording is saved to Videos > Screen Recordings; click the banner to show it.
+- Small files in sharp quality (hardware H.264 at 60 fps) with your PC's sound.
+- HDR screens are converted to normal colours, so recordings never look washed out.
+- Settings > General > "Show in screen recordings" chooses whether the island appears in your videos.
+
 Ask: up-to-date answers out of the box
-- The assistant now looks things up before answering (web results, the latest news, Wikipedia and live crypto prices), so questions like "is GTA 6 out yet?" get today's answer, not one from the model's old memory.
-- No API key needed. A key of your own in Settings → AI is now only a backup.
-- It also knows your local date and time, so "tomorrow" and "tonight" are right.
+- The assistant looks things up before answering (web results, news, Wikipedia, live crypto prices), so questions like "is GTA 6 out yet?" get today's answer.
+- No API key needed. A key of your own in Settings > AI is now only a backup.
+- It knows your local date and time, so "tomorrow" and "tonight" are right.
+- The liquid glass bar now also shows up in screenshots and recordings.
 
 New: send files to your phone from the Shelf
-- Nearby phones and computers running the free LocalSend app (iPhone, Android, Mac, Windows, Linux) appear under the Shelf. Tap one to send everything on the Shelf, or open a file's actions and choose "Send to…".
+- Nearby phones and computers running the free LocalSend app (iPhone, Android, Mac, Windows, Linux) appear under the Shelf. Pick one and choose which files to send.
 - Phones can send to your PC too: the island asks first. Accepted files go to your Downloads folder and appear on the Shelf.
-- If Windows Firewall stops phones from reaching your PC, the Shelf shows "Can't receive". Tap it once to allow phones on your network.
-- Turn it off or change the name your phone sees in Settings → General → Nearby sharing.
+- If Windows Firewall blocks phones, the Shelf shows "Can't receive". Tap it once to allow phones on your network.
 
 Fixes
-- Files deleted from your PC now disappear from the Shelf within a couple of seconds.
-- A file's actions no longer spill out of the Shelf when phones are nearby.
+- Fixed a crash right after the AI answered a question.
+- The AI bar no longer blinks black when it opens, and its shadow is soft like the other tabs.
+- The island hides when a browser video (like YouTube) goes fullscreen.
+- Photos dragged from a browser onto the Shelf no longer vanish after a second.
+- Files deleted from your PC disappear from the Shelf, and a file's actions no longer spill out of it.
+- "Show in folder" opens the right folder instead of Documents.
+
+Islander is now free software under the GNU GPL v3.0 or later.

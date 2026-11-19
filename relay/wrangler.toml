@@ -7,10 +7,14 @@ main = "src/index.ts"
 compatibility_date = "2026-11-01"
 
 [vars]
-MODEL = "gemini-flash-lite-latest"
+MODEL = "gemini-3.5-flash-lite"
 DAILY_LIMIT_PER_DEVICE = "50"   # questions per install per day
 GLOBAL_DAILY_LIMIT = "20000"    # hard ceiling for everyone combined (protects your bill)
 
 [[kv_namespaces]]
 binding = "LIMITS"
-id = "PASTE_KV_NAMESPACE_ID_HERE"
+id = "8e1aaf62bb8046caad664487e33771eb"
+
+# Speech-to-text for voice questions (Whisper on Workers AI; free daily allowance).
+[ai]
+binding = "AI"

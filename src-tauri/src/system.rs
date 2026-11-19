@@ -70,7 +70,21 @@ mod imp {
 
     /// Explorer window with the file selected.
     pub fn reveal(path: &str) -> Result<(), String> {
-        std::process::Command::new("explorer.exe").arg(format!("/select,{path}")).spawn().map(|_| ()).map_err(|e| e.to_string())
+        use std::os::windows::process::CommandExt;
+        let p = std::path::Path::new(path);
+        let mut cmd = std::process::Command::new("explorer.exe");
+        if p.is_file() {
+            // Explorer only understands  /select,"C:\a b\c.mp4"  (quotes around the path alone).
+            // Passing it as a normal argument quotes the whole thing, which Explorer can't read,
+            // so it opened Documents for any file with a space in its name.
+            cmd.raw_arg(format!("/select,\"{path}\""));
+        } else if let Some(dir) = if p.is_dir() { Some(p) } else { p.parent().filter(|d| d.is_dir()) } {
+            // The file is gone (moved or deleted): open the folder it was in.
+            cmd.raw_arg(format!("\"{}\"", dir.display()));
+        } else {
+            return Err(format!("{path} no longer exists"));
+        }
+        cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
     }
 
     pub fn lock() {
@@ -100,7 +114,7 @@ mod imp {
             std::thread::sleep(std::time::Duration::from_millis(250));
             let key = |vk: VIRTUAL_KEY, flags: KEYBD_EVENT_FLAGS| INPUT {
                 r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: 0, dwFlags: flags, time: 0, dwExtraInfo: 0 } },
+                Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: 0, dwFlags: flags, time: 0, dwExtraInfo: crate::takeover::ISLAND_INPUT } },
             };
             let ext = KEYEVENTF_EXTENDEDKEY;
             let up = KEYBD_EVENT_FLAGS(KEYEVENTF_EXTENDEDKEY.0 | KEYEVENTF_KEYUP.0);

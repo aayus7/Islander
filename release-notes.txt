@@ -1,0 +1,16 @@
+Islander 0.9.1
+
+Ask: up-to-date answers out of the box
+- The assistant now looks things up before answering (web results, the latest news, Wikipedia and live crypto prices), so questions like "is GTA 6 out yet?" get today's answer, not one from the model's old memory.
+- No API key needed. A key of your own in Settings → AI is now only a backup.
+- It also knows your local date and time, so "tomorrow" and "tonight" are right.
+
+New: send files to your phone from the Shelf
+- Nearby phones and computers running the free LocalSend app (iPhone, Android, Mac, Windows, Linux) appear under the Shelf. Tap one to send everything on the Shelf, or open a file's actions and choose "Send to…".
+- Phones can send to your PC too: the island asks first. Accepted files go to your Downloads folder and appear on the Shelf.
+- If Windows Firewall stops phones from reaching your PC, the Shelf shows "Can't receive". Tap it once to allow phones on your network.
+- Turn it off or change the name your phone sees in Settings → General → Nearby sharing.
+
+Fixes
+- Files deleted from your PC now disappear from the Shelf within a couple of seconds.
+- A file's actions no longer spill out of the Shelf when phones are nearby.

@@ -5,8 +5,10 @@
 //                 black that melts into liquid glass at the bottom of the card.
 //  Typing again — any key brings the search pill back for a follow-up (context is kept).
 import { AnimatePresence, motion } from "motion/react";
+import { DEFAULT_RELAY } from "../lib/relayUrl";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { bridge } from "../bridge";
+import { on } from "../lib/native";
 import type { AiMeta } from "../lib/ai";
 import { aiSession, useAiSession, type AiView } from "../lib/aiSession";
 import { useSettings } from "../lib/settings";
@@ -27,7 +29,7 @@ interface Props {
 
 export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) {
   const { settings } = useSettings();
-  const { q, chunks, status, error, view, meta } = useAiSession();
+  const { q, chunks, status, error, view, meta, voice, voiceNote } = useAiSession();
   const setQ = aiSession.setQuery;
   const setView = aiSession.setView;
   const [focused, setFocused] = useState(false);
@@ -43,6 +45,16 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
     const t = setTimeout(() => input.current?.focus(), 60);
     return () => clearTimeout(t);
   }, [active, view]);
+
+  // While dictating, keep the newest words in view.
+  useEffect(() => {
+    if (voice === "listening" && input.current) input.current.scrollLeft = input.current.scrollWidth;
+  }, [q, voice]);
+
+  // Closing the panel or switching tabs never leaves the mic on.
+  // (While the words are being transcribed the island shows its thinking circle instead of
+  // this panel, so only an open mic is stopped here.)
+  useEffect(() => () => aiSession.dropMic(), []);
 
   // In the answer view, typing any character starts a follow-up.
   useEffect(() => {
@@ -81,7 +93,7 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
 
   const cfg = () => ({
     apiKey: settings.aiApiKey,
-    relayUrl: settings.aiRelayUrl,
+    relayUrl: settings.aiRelayUrl.trim() || DEFAULT_RELAY,
     model: settings.aiModel,
     deviceId: settings.deviceId,
     log: bridge.log,
@@ -91,6 +103,12 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
   }
 
   const busy = status === "thinking" || status === "streaming";
+  const listening = voice === "listening";
+  const toggleMic = () => {
+    if (!active) onActivate();
+    if (voice === "listening") aiSession.stopListening(cfg());
+    else if (voice === "off") aiSession.listen(cfg());
+  };
 
   return (
     <div ref={box} className={`ai ai-view-${view}`} style={{ width }}>
@@ -116,7 +134,8 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
             animate={{ opacity: 1, filter: "blur(0px)" }}
             exit={{ opacity: 0, filter: "blur(6px)", transition: { duration: 0.15 } }}
             transition={{ duration: 0.25 }}
-            onPointerDown={() => {
+            onClick={() => {
+              // On release (not press), so pressing and holding can pick the island up.
               if (!active) onActivate();
             }}
           >
@@ -125,12 +144,18 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
                 ref={input}
                 className="ai-input"
                 value={q}
+                readOnly={voice !== "off"}
                 spellCheck={false}
                 autoComplete="off"
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {
+                  if (voice !== "off") {
+                    if (e.key === "Escape") aiSession.cancelListening();
+                    if (e.key === "Enter" && listening) aiSession.stopListening(cfg());
+                    return;
+                  }
                   if (e.key === "Enter") submit();
                   if (e.key === "Escape") {
                     if (busy) aiSession.cancel();
@@ -139,13 +164,30 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
                   }
                 }}
               />
-              {!q && <span className="ai-placeholder">Search or Ask</span>}
+              {!q && (
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={listening ? "l" : voice === "transcribing" ? "t" : voiceNote || "p"}
+                    className={`ai-placeholder ${voice !== "off" ? "ai-placeholder-live" : ""}`}
+                    initial={{ opacity: 0, y: 6, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, y: -6, filter: "blur(4px)", transition: { duration: 0.14 } }}
+                    transition={{ duration: 0.22 }}
+                  >
+                    {listening ? "Listening…" : voice === "transcribing" ? "One moment…" : voiceNote || "Search or Ask"}
+                  </motion.span>
+                </AnimatePresence>
+              )}
               <span ref={measure} className="ai-measure">
                 {q}
               </span>
-              {focused && <span className="ai-caret" style={{ transform: `translateX(${caretX}px)` }} />}
+              {focused && voice === "off" && <span className="ai-caret" style={{ transform: `translateX(${caretX}px)` }} />}
             </div>
-            <Sparkle busy={busy} />
+            {busy || voice === "transcribing" || (q && voice === "off") ? (
+              <Sparkle busy={busy || voice === "transcribing"} />
+            ) : (
+              <MicButton listening={listening} onToggle={toggleMic} />
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -157,7 +199,8 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
             animate={{ opacity: 1, filter: "blur(0px)" }}
             exit={{ opacity: 0, filter: "blur(8px)", transition: { duration: 0.15 } }}
             transition={{ duration: 0.3 }}
-            onPointerDown={() => {
+            onClick={() => {
+              // On release (not press), so pressing and holding can pick the island up.
               if (!active) onActivate();
             }}
           >
@@ -215,9 +258,71 @@ function SourceLine({ meta }: { meta: AiMeta }) {
           <span>{domains.length ? domains.join(" · ") : "Google Search"}</span>
         </>
       ) : (
-        <span className="ai-stale">{meta.searchEnabled ? "Answered from memory, may be out of date" : "Web search unavailable on this key, may be out of date"}</span>
+        <span className="ai-stale">{meta.searchEnabled ? "Answered from memory, may be out of date" : "Answered without a web lookup, may be out of date"}</span>
       )}
     </motion.div>
+  );
+}
+
+/**
+ * Mic: a quiet glyph at rest; while listening it becomes a white disc with a live voice
+ * waveform (tap it to finish early). Levels go straight to the DOM, not through React.
+ */
+function MicButton({ listening, onToggle }: { listening: boolean; onToggle(): void }) {
+  const bars = useRef<(HTMLSpanElement | null)[]>([]);
+  useEffect(() => {
+    if (!listening) return;
+    let level = 0;
+    let target = 0;
+    let raf = 0;
+    const SHAPE = [0.55, 0.85, 1, 0.8, 0.5];
+    const off = on<number>("mic://level", (v) => (target = v));
+    const tick = (t: number) => {
+      // Fast attack, slower release, like iOS dictation.
+      level += (target - level) * (target > level ? 0.45 : 0.12);
+      bars.current.forEach((b, i) => {
+        if (!b) return;
+        const wobble = 0.75 + 0.25 * Math.sin(t / 95 + i * 1.7);
+        const h = 3 + 15 * Math.min(1, level * 1.25) * SHAPE[i] * wobble;
+        b.style.height = `${h.toFixed(1)}px`;
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      off();
+      cancelAnimationFrame(raf);
+    };
+  }, [listening]);
+  return (
+    <motion.button
+      className={`ai-mic ${listening ? "on" : ""}`}
+      aria-label={listening ? "Stop listening" : "Ask by voice"}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      initial={{ opacity: 0, scale: 0.6 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileTap={{ scale: 0.88 }}
+      transition={{ type: "spring", stiffness: 420, damping: 26 }}
+    >
+      <AnimatePresence mode="popLayout" initial={false}>
+        {listening ? (
+          <motion.span key="wave" className="ai-mic-wave" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <span key={i} ref={(el) => void (bars.current[i] = el)} />
+            ))}
+          </motion.span>
+        ) : (
+          <motion.svg key="mic" width="20" height="20" viewBox="0 0 24 24" fill="none" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}>
+            <rect x="8.6" y="2.6" width="6.8" height="12.2" rx="3.4" fill="currentColor" />
+            <path d="M5.6 11.2a6.4 6.4 0 0 0 12.8 0M12 17.6v3.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </motion.svg>
+        )}
+      </AnimatePresence>
+    </motion.button>
   );
 }
 

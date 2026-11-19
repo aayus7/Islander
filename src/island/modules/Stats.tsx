@@ -97,8 +97,29 @@ function Ring({ label, value, ready, sub }: { label: string; value: number; read
   const color = level(v);
   return (
     <div className="ring">
-      <svg style={{ display: "block" }} width="62" height="62" viewBox="0 0 62 62">
+      <svg style={{ display: "block", overflow: "visible" }} width="62" height="62" viewBox="0 0 62 62">
+        <defs>
+          <filter id="ring-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3.2" />
+          </filter>
+        </defs>
         <circle cx="31" cy="31" r={R} fill="none" stroke="rgba(118,118,128,0.28)" strokeWidth="6" />
+        {/* Soft glow: the same arc, blurred, underneath — follows the value and colour. */}
+        <motion.circle
+          cx="31"
+          cy="31"
+          r={R}
+          fill="none"
+          strokeWidth="6"
+          strokeLinecap="round"
+          transform="rotate(-90 31 31)"
+          strokeDasharray={C}
+          filter="url(#ring-glow)"
+          opacity={0.55}
+          initial={false}
+          animate={{ strokeDashoffset: C * (1 - (ready ? v : 0) / 100), stroke: color }}
+          transition={{ type: "spring", stiffness: 120, damping: 22 }}
+        />
         <motion.circle
           cx="31"
           cy="31"
@@ -181,7 +202,7 @@ function Spark({ hist, color }: { hist: React.MutableRefObject<{ down: number; t
       </defs>
       <g mask="url(#spk-mask)">
         <path ref={area} fill="url(#spk)" />
-        <path ref={line} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+        <path ref={line} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 3px ${color}) drop-shadow(0 0 1px ${color})` }} />
       </g>
     </svg>
   );

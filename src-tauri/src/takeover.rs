@@ -25,6 +25,8 @@ pub fn hush_app(_aumid: &str) {}
 pub fn install_exit_guard() {}
 #[cfg(not(windows))]
 pub fn restore_on_exit() {}
+#[cfg(not(windows))]
+pub fn restore_from_backup_file() {}
 
 #[cfg(windows)]
 mod imp {
@@ -55,12 +57,22 @@ mod imp {
     }
 
     static TX: OnceLock<Mutex<Sender<Key>>> = OnceLock::new();
+    /// Marks keystrokes Islander sends itself (dwExtraInfo), so the hook lets them through.
+    pub const ISLAND_INPUT: usize = 0x1514_A4D0;
+    /// Volume/media keys the hook has seen (diagnostics: tells "hook dropped" apart from
+    /// "keys arrive but Windows still shows its popup").
+    static SEEN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    static LAST_SEEN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
     unsafe extern "system" fn hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         if code >= 0 && KEYS.load(Ordering::Relaxed) {
             let k = &*(lparam.0 as *const KBDLLHOOKSTRUCT);
-            // Leave keys other programs simulate alone (e.g. our own Win+PrintScreen).
-            if k.flags.0 & LLKHF_INJECTED.0 == 0 {
+            // Volume and media keys are handled even when they're *injected*: laptop Fn
+            // keys, keyboard/mouse software (Logitech, Razer, ASUS, HP…) and macro tools
+            // send them that way, and letting those through is what made Windows' own
+            // volume popup still appear. Only keys marked as Islander's own pass through.
+            let _ = LLKHF_INJECTED;
+            if k.dwExtraInfo != ISLAND_INPUT {
                 let key = match k.vkCode {
                     0xAF => Some(Key::VolUp),
                     0xAE => Some(Key::VolDown),
@@ -71,6 +83,7 @@ mod imp {
                     _ => None,
                 };
                 if let Some(key) = key {
+                    SEEN.fetch_add(1, Ordering::Relaxed);
                     let down = wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN;
                     if down {
                         if let Some(tx) = TX.get() {
@@ -84,7 +97,116 @@ mod imp {
         CallNextHookEx(None, code, wparam, lparam)
     }
 
+    /* ---------------- Windows' own volume popup ----------------
+     * On some PCs Windows still shows its volume popup even though the keys never reach
+     * it (it also reads the keyboard's media buttons another way). So, like the
+     * HideVolumeOSD tool does: find the popup's window — the one that appears right
+     * after a volume key — and keep it minimised, which stops it from ever showing.
+     * Put back when Islander quits or the option is turned off. */
+
+    static OSD: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+    /// Windows that can be the popup: Windows 11's XAML host with its content bridge
+    /// child, or Windows 10's NativeHWNDHost with a DirectUIHWND child.
+    fn osd_candidates() -> Vec<windows::Win32::Foundation::HWND> {
+        use windows::core::w;
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::FindWindowExW;
+        let mut out = Vec::new();
+        for (outer, inner, inner_name) in [
+            (w!("XamlExplorerHostIslandWindow"), w!("Windows.UI.Composition.DesktopWindowContentBridge"), w!("DesktopWindowXamlSource")),
+            (w!("NativeHWNDHost"), w!("DirectUIHWND"), PCWSTR::null()),
+        ] {
+            let mut after: Option<HWND> = None;
+            unsafe {
+                while let Ok(h) = FindWindowExW(None, after, outer, PCWSTR::null()) {
+                    if h.0.is_null() {
+                        break;
+                    }
+                    if FindWindowExW(Some(h), None, inner, inner_name).map(|c| !c.0.is_null()).unwrap_or(false) {
+                        out.push(h);
+                    }
+                    after = Some(h);
+                }
+            }
+        }
+        out
+    }
+
+    fn visible_now(h: windows::Win32::Foundation::HWND) -> bool {
+        use windows::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible};
+        unsafe { IsWindowVisible(h).as_bool() && !IsIconic(h).as_bool() }
+    }
+
+    /// After a volume key: if Windows' popup came up anyway, minimise it for good.
+    fn suppress_osd(before: Vec<windows::Win32::Foundation::HWND>) {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{IsWindow, ShowWindow, SW_MINIMIZE};
+        let known = OSD.load(Ordering::Relaxed);
+        if known != 0 {
+            let h = HWND(known as _);
+            unsafe {
+                if IsWindow(Some(h)).as_bool() {
+                    if visible_now(h) {
+                        let _ = ShowWindow(h, SW_MINIMIZE);
+                    }
+                    return;
+                }
+            }
+            OSD.store(0, Ordering::Relaxed); // Explorer restarted: find it again
+        }
+        // (Window handles as numbers: raw handles can't cross threads.)
+        let before: Vec<isize> = before.iter().map(|h| h.0 as isize).collect();
+        std::thread::spawn(move || {
+            for wait in [40u64, 80, 160, 320, 600] {
+                std::thread::sleep(Duration::from_millis(wait));
+                // The popup is the window that just became visible.
+                let fresh: Vec<HWND> = osd_candidates().into_iter().filter(|h| visible_now(*h) && !before.contains(&(h.0 as isize))).collect();
+                if fresh.len() == 1 {
+                    let h = fresh[0];
+                    unsafe {
+                        let _ = ShowWindow(h, SW_MINIMIZE);
+                    }
+                    OSD.store(h.0 as isize, Ordering::Relaxed);
+                    #[cfg(debug_assertions)]
+                    crate::log_line(format!("keys: Windows' volume popup found ({:?}) and kept hidden", h.0));
+                    return;
+                }
+            }
+        });
+    }
+
+    /// Give Windows its volume popup back (quitting, or the option turned off).
+    pub fn restore_osd() {
+        use windows::Win32::UI::WindowsAndMessaging::{IsIconic, ShowWindow, SW_HIDE, SW_RESTORE};
+        OSD.store(0, Ordering::Relaxed);
+        for h in osd_candidates() {
+            unsafe {
+                if IsIconic(h).as_bool() {
+                    // Restore, then hide at once: it's shown again the next time the
+                    // volume changes, and doesn't sit invisibly blocking clicks.
+                    let _ = ShowWindow(h, SW_RESTORE);
+                    let _ = ShowWindow(h, SW_HIDE);
+                }
+            }
+        }
+    }
+
     fn handle(key: Key) {
+        let before = if matches!(key, Key::VolUp | Key::VolDown | Key::Mute) {
+            osd_candidates().into_iter().filter(|h| visible_now(*h)).collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+        #[cfg(debug_assertions)]
+        crate::log_line(format!("keys: {} handled by the island", match key {
+            Key::VolUp => "volume up",
+            Key::VolDown => "volume down",
+            Key::Mute => "mute",
+            Key::PlayPause => "play/pause",
+            Key::Next => "next",
+            Key::Prev => "previous",
+        }));
         match key {
             Key::VolUp | Key::VolDown | Key::Mute => {
                 let Some((vol, _)) = crate::hud::imp::endpoint() else { return };
@@ -106,6 +228,7 @@ mod imp {
                         }
                     }
                 }
+                suppress_osd(before);
             }
             Key::PlayPause | Key::Next | Key::Prev => {
                 use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as Manager;
@@ -127,6 +250,7 @@ mod imp {
     /// Closing the console window (or Ctrl+C) ends the island abruptly: put the
     /// banners back first. Windows gives us a few seconds for this.
     unsafe extern "system" fn on_console_close(_ctrl: u32) -> windows::core::BOOL {
+        restore_osd();
         if ACTIVE.swap(false, Ordering::Relaxed) {
             restore_all();
         }
@@ -140,7 +264,20 @@ mod imp {
     }
 
     /// Put everything back (island quitting).
+    /// Used by the uninstaller (`Islander.exe --restore-windows`): put back every app's
+    /// notification banner from the backup file, even if Islander was force-closed.
+    pub fn restore_from_backup_file() {
+        restore_osd();
+        let Some(dir) = std::env::var_os("APPDATA").map(|d| std::path::PathBuf::from(d).join("dev.island.desktop")) else { return };
+        let p = dir.join("banner-backup.json");
+        let Some(prev) = std::fs::read_to_string(&p).ok().and_then(|s| serde_json::from_str::<HashMap<String, Option<u32>>>(&s).ok()) else { return };
+        let _ = BACKUP.set(p);
+        *SAVED.lock().unwrap() = Some(prev);
+        restore_all();
+    }
+
     pub fn restore_on_exit() {
+        restore_osd();
         if ACTIVE.swap(false, Ordering::Relaxed) {
             restore_all();
         }
@@ -161,12 +298,48 @@ mod imp {
         });
         // Hook thread: a low-level hook needs a message loop on its own thread.
         std::thread::spawn(|| unsafe {
-            if let Err(e) = SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), None, 0) {
-                eprintln!("[island] couldn't take over the volume keys: {e}");
-                return;
-            }
+            use windows::Win32::System::Threading::{GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_TIME_CRITICAL};
+            use windows::Win32::UI::WindowsAndMessaging::{KillTimer, SetTimer, UnhookWindowsHookEx, WM_TIMER};
+            // The hook must answer within Windows' LowLevelHooksTimeout or Windows quietly
+            // drops it (and its own popup comes back). Run this thread at top priority…
+            let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+            // Low-level hooks want the module that contains the callback (this exe).
+            let module = windows::Win32::System::LibraryLoader::GetModuleHandleW(PCWSTR::null()).ok().map(windows::Win32::Foundation::HINSTANCE::from);
+            let mut current = match SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), module, 0) {
+                Ok(h) => {
+                    eprintln!("[island] volume & media keys: handled by the island");
+                    h
+                }
+                Err(e) => {
+                    eprintln!("[island] couldn't take over the volume keys: {e}");
+                    return;
+                }
+            };
+            // …and re-install it every 20 s, so even if Windows dropped it once (PC under
+            // heavy load, waking from sleep) it's back almost at once.
+            let timer = SetTimer(None, 0, 20_000, None);
             let mut msg = MSG::default();
-            while GetMessageW(&mut msg, None, 0, 0).as_bool() {}
+            while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+                if msg.message == WM_TIMER {
+                    let ok = match SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), module, 0) {
+                        Ok(h) => {
+                            let _ = UnhookWindowsHookEx(current);
+                            current = h;
+                            true
+                        }
+                        Err(_) => false,
+                    };
+                    #[cfg(debug_assertions)]
+                    {
+                        let seen = SEEN.load(Ordering::Relaxed);
+                        if seen != LAST_SEEN.swap(seen, Ordering::Relaxed) || !ok {
+                            crate::log_line(format!("keys: hook refreshed (ok={ok}, on={}, keys seen so far={seen})", KEYS.load(Ordering::Relaxed)));
+                        }
+                    }
+                    let _ = ok;
+                }
+            }
+            let _ = KillTimer(None, timer);
         });
     }
 

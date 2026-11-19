@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Islander",
-  "version": "0.1.0",
+  "mainBinaryName": "Islander",
+  "version": "0.9.1",
   "identifier": "dev.island.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -25,14 +26,50 @@
         "minimizable": false,
         "shadow": false,
         "focus": false,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --enable-gpu-rasterization --enable-zero-copy --disable-background-timer-throttling --disable-renderer-backgrounding"
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.png", "icons/icon.ico"]
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "Islander",
+    "shortDescription": "A Dynamic Island for Windows",
+    "longDescription": "Islander brings an iOS-style Dynamic Island to Windows: now playing, controls, timers, notifications, file shelf, clipboard and more.",
+    "copyright": "© 2026 Islander",
+    "license": "GPL-3.0-or-later",
+    "category": "Utility",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "installer-hooks.nsh"
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU4NzM5QUIxQzcxOEVEQUEKUldTcTdSakhzWnB6V05UVnJDeTlSRitoUVZzQVAzYWtMVG90YXFSamhiOHdyT1R5WTNZQk9QNVUK",
+      "endpoints": [
+        "https://github.com/aayus7/Islander/releases/latest/download/latest.json",
+        "https://github.com/aayus7/islander-releases/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -1,12 +1,13 @@
 // Banners: Windows notifications, timer alerts and device alerts drop into the island
 // like an iOS alert. Swipe sideways to dismiss, click to jump to the source.
 import { motion, useMotionValue, useTransform } from "motion/react";
+import { RecordGlyph } from "./ScreenRec";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { on, send } from "../../lib/native";
 import { useSettings } from "../../lib/settings";
 import { clock, clockActions } from "../../lib/timer";
 import { ClockGlyph } from "./Clock";
-import { ArrowDown } from "./Downloads";
+import { ArrowDown, FileTile } from "./Downloads";
 
 export const BANNER_H = 84;
 
@@ -22,13 +23,17 @@ export interface BannerData {
   /** A photo/preview attached to the notification (thumbnail on the right). */
   attachment?: string | null;
   /** Glyph + tint for built-in banners (no app icon). */
-  glyph?: "timer" | "focus" | "battery" | "download";
+  glyph?: "timer" | "focus" | "battery" | "download" | "update" | "record";
   tint?: string;
   /** Source to activate on click (AppUserModelId) or an island tab to open. */
   aumid?: string;
   goto?: string;
   /** File to show in Explorer on click. */
   reveal?: string;
+  /** Click runs this instead (e.g. "update": install the downloaded update). */
+  action?: "update";
+  /** A finished download: its file name (shown as the file's tile with a check). */
+  file?: string;
   at: number;
   ttl: number;
 }
@@ -160,10 +165,13 @@ export function Banner({ banner, width }: { banner: BannerData; width: number })
         if (banner.aumid) send("notify_open", { aumid: banner.aumid });
         if (banner.reveal) send("reveal_path", { path: banner.reveal });
         if (banner.goto) window.dispatchEvent(new CustomEvent("island:goto", { detail: banner.goto }));
+        if (banner.action === "update") send("update_install");
         dismissBanner(banner.id);
       }}
     >
-      {banner.avatar ? (
+      {banner.file ? (
+        <FileTile name={banner.file} size={44} done />
+      ) : banner.avatar ? (
         // iOS communication notification: the person, with the app as a small badge.
         <div className="banner-avatar">
           <img src={banner.avatar} alt="" draggable={false} style={{ borderRadius: banner.avatarRound ? "50%" : 11 }} />
@@ -183,6 +191,14 @@ export function Banner({ banner, width }: { banner: BannerData; width: number })
           </span>
         ) : banner.glyph === "battery" ? (
           <BatteryGlyph />
+        ) : banner.glyph === "update" ? (
+          <span className="banner-update-icon">
+            <span />
+          </span>
+        ) : banner.glyph === "record" ? (
+          <span style={{ color: "#fff", display: "flex" }}>
+            <RecordGlyph size={22} dot="#ff3b30" />
+          </span>
         ) : banner.glyph === "download" ? (
           <span style={{ color: "#fff", display: "flex" }}>
             <ArrowDown size={22} />
@@ -201,6 +217,13 @@ export function Banner({ banner, width }: { banner: BannerData; width: number })
         {banner.body && <span className="banner-body">{banner.body}</span>}
       </div>
       {banner.attachment && <img className="banner-attach" src={banner.attachment} alt="" draggable={false} />}
+      {banner.file && banner.reveal && (
+        <span className="banner-folder" title="Show in folder">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+            <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+          </svg>
+        </span>
+      )}
     </motion.div>
   );
 }

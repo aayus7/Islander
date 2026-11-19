@@ -205,6 +205,7 @@ mod imp {
     use tauri::{AppHandle, Emitter};
     use windows::core::Result as WinResult;
     use windows::Foundation::TypedEventHandler;
+    use windows_future::{AsyncStatus, IAsyncOperation};
     use windows::Media::Control::{
         GlobalSystemMediaTransportControlsSession as Session,
         GlobalSystemMediaTransportControlsSessionManager as Manager,
@@ -271,6 +272,12 @@ mod imp {
     struct Watcher {
         art: HashMap<String, String>,
         misses: HashMap<String, u8>,
+        /// Artwork still loading (track key → the open operation). Opening it can take a
+        /// while (Spotify fetches it), so it's polled instead of waited on: the new title
+        /// shows at once, and the art follows the moment it's there.
+        art_loading: HashMap<String, IAsyncOperation<IRandomAccessStreamWithContentType>>,
+        /// Last artwork shown per session (kept on screen while the next one loads).
+        last_art: HashMap<String, String>,
         clocks: HashMap<String, Clock>,
         /// Sessions we've attached change-handlers to (kept alive here).
         hooked: HashMap<String, Session>,
@@ -523,22 +530,55 @@ mod imp {
         let key = format!("{id}|{track}");
         let artwork = match w.art.get(&key) {
             Some(a) => Some(a.clone()),
-            None if w.misses.get(&key).copied().unwrap_or(0) < 6 => {
-                match props.Thumbnail().ok().and_then(|t| read_thumbnail(&t).ok()) {
-                    Some(a) => {
-                        w.art.insert(key, a.clone());
-                        Some(a)
+            None => {
+                let mut got: Option<String> = None;
+                let mut failed = false;
+                if let Some(op) = w.art_loading.get(&key) {
+                    match op.Status() {
+                        Ok(AsyncStatus::Started) => mark_dirty(), // still loading: look again shortly
+                        Ok(AsyncStatus::Completed) => {
+                            match op.GetResults().and_then(|st| read_stream(&st)) {
+                                Ok(a) => got = Some(a),
+                                Err(_) => failed = true,
+                            }
+                            w.art_loading.remove(&key);
+                        }
+                        _ => {
+                            failed = true;
+                            w.art_loading.remove(&key);
+                        }
                     }
-                    None => {
-                        // Apps often publish the title a moment before the art: retry a few times.
-                        *w.misses.entry(key).or_insert(0) += 1;
-                        mark_dirty();
-                        None
+                } else if w.misses.get(&key).copied().unwrap_or(0) < 6 {
+                    match props.Thumbnail().ok().and_then(|t| t.OpenReadAsync().ok()) {
+                        Some(op) => {
+                            w.art_loading.insert(key.clone(), op);
+                            mark_dirty();
+                        }
+                        None => failed = true,
                     }
                 }
+                if failed {
+                    // Apps often publish the title a moment before the art: retry a few times.
+                    *w.misses.entry(key.clone()).or_insert(0) += 1;
+                    mark_dirty();
+                }
+                match got {
+                    Some(a) => {
+                        w.art.insert(key.clone(), a.clone());
+                        Some(a)
+                    }
+                    // Meanwhile keep the previous cover up (it flips when the new one lands).
+                    None if w.art_loading.contains_key(&key) => w.last_art.get(&id).cloned(),
+                    None => None,
+                }
             }
-            None => None,
         };
+        if let Some(a) = &artwork {
+            w.last_art.insert(id.clone(), a.clone());
+        }
+        if w.art_loading.len() > 16 {
+            w.art_loading.clear();
+        }
 
         let id_for_meter = id.clone();
         let (app_name, icon) = identity(&id, w);
@@ -732,6 +772,19 @@ mod imp {
         ))
     }
 
+    /// The media session manager, made once (asking Windows for it on every press cost a
+    /// noticeable moment). Agile WinRT object, so any thread may use it.
+    fn command_manager() -> WinResult<Manager> {
+        static MGR: std::sync::Mutex<Option<Manager>> = std::sync::Mutex::new(None);
+        let mut g = MGR.lock().unwrap();
+        if let Some(m) = g.as_ref() {
+            return Ok(m.clone());
+        }
+        let m = Manager::RequestAsync()?.get()?;
+        *g = Some(m.clone());
+        Ok(m)
+    }
+
     /// action: "toggle" | "next" | "prev" | "seek:<seconds>"
     /// Full exe path of a running app by stem (for re-launch / focus).
     pub fn process_exe(stem: &str) -> Option<String> {
@@ -759,7 +812,7 @@ mod imp {
             return r;
         }
         let run = || -> WinResult<()> {
-            let m = Manager::RequestAsync()?.get()?;
+            let m = command_manager()?;
             let list = m.GetSessions()?;
             for i in 0..list.Size()? {
                 let s = list.GetAt(i)?;
@@ -770,11 +823,12 @@ mod imp {
                     "toggle" => {
                         s.TryTogglePlayPauseAsync()?.get()?;
                     }
+                    // Fire and return: waiting for the app to confirm only delays the island.
                     "next" => {
-                        s.TrySkipNextAsync()?.get()?;
+                        let _op = s.TrySkipNextAsync()?;
                     }
                     "prev" => {
-                        s.TrySkipPreviousAsync()?.get()?;
+                        let _op = s.TrySkipPreviousAsync()?;
                     }
                     a if a.starts_with("seek:") => {
                         let secs: f64 = a[5..].parse().unwrap_or(0.0);

@@ -115,6 +115,12 @@ mod imp {
         let mut smooth = [0.0f32; BANDS];
         let mut zero_frames = 0u32;
         let mut last_device_check = Instant::now();
+        // Loudest recent level of each band (dB): bars are drawn against it, like iOS, so a
+        // quiet song still moves while a loud one doesn't pin every bar at the top.
+        let mut peak = [-40.0f32; BANDS];
+        // Noise gate: below it the bars rest flat (fade tails, hiss, near-silence).
+        let mut gate_open = false;
+        let mut last_frame = Instant::now();
 
         loop {
             let fps = crate::settings::FPS.load(Ordering::Relaxed).clamp(30, 240) as u64;
@@ -132,6 +138,9 @@ mod imp {
             }
 
             // Loopback delivers no packets while nothing plays → treat as silence.
+            let dt = last_frame.elapsed().as_secs_f32().clamp(0.001, 0.1);
+            last_frame = Instant::now();
+            let mut energy = 0.0f32;
             let has_audio = {
                 let mut g = buf.lock().unwrap();
                 let fresh = g.fresh;
@@ -140,32 +149,46 @@ mod imp {
                     let start = g.samples.len() - FFT;
                     for (i, s) in g.samples[start..].iter().enumerate() {
                         input[i] = s * window[i];
+                        energy += s * s;
                     }
                     true
                 } else {
                     false
                 }
             };
+            // Overall loudness of this frame; the gate opens at -50 dBFS and closes at
+            // -56 (hysteresis, so it doesn't chatter on the edge).
+            let rms_db = 10.0 * (energy / FFT as f32 + 1e-12).log10();
+            gate_open = has_audio && if gate_open { rms_db > -56.0 } else { rms_db > -50.0 };
 
             let mut target = [0.0f32; BANDS];
-            if has_audio && fft.process(&mut input, &mut spectrum).is_ok() {
+            if gate_open && fft.process(&mut input, &mut spectrum).is_ok() {
                 let norm = 2.0 / (FFT as f32 * 0.5); // amplitude, Hann-corrected
                 for (i, &(lo, hi)) in ranges.iter().enumerate() {
                     let power: f32 = spectrum[lo..hi].iter().map(|c| c.norm_sqr()).sum::<f32>() / (hi - lo) as f32;
                     let amp = power.sqrt() * norm;
                     let db = 20.0 * (amp + 1e-9).log10();
-                    // Higher bands carry less energy in music: lower their floor so they still move.
-                    let floor = -68.0 - i as f32 * 3.5;
-                    target[i] = ((db - floor) / 52.0).clamp(0.0, 1.0);
+                    // Music has less energy up high: a slightly lower floor there, so the
+                    // treble bars still move, but not so low that hiss shows.
+                    let floor = -60.0 - i as f32 * 2.0;
+                    // Peak follows a louder level at once and falls back ~9 dB/s; it never
+                    // drops below floor+30, so soft passages stay low instead of filling up.
+                    peak[i] = db.max(peak[i] - 9.0 * dt).max(floor + 30.0);
+                    let v = ((db - floor) / (peak[i] - floor)).clamp(0.0, 1.0);
+                    // Soft knee: the bottom 10% is noise, not music.
+                    target[i] = ((v - 0.1) / 0.9).max(0.0).powf(1.2);
                 }
             }
 
-            // Instant attack (bars hit the beat on the same frame), quick release.
+            // Fast attack (~10 ms) so bars land on the beat, smooth release (~85 ms) like
+            // iOS; frame-rate independent.
+            let up = 1.0 - (-dt / 0.010).exp();
+            let down = 1.0 - (-dt / 0.085).exp();
             let mut any = false;
             for i in 0..BANDS {
-                let k = if target[i] > smooth[i] { 1.0 } else { 0.38 };
+                let k = if target[i] > smooth[i] { up } else { down };
                 smooth[i] += (target[i] - smooth[i]) * k;
-                if smooth[i] < 0.004 {
+                if smooth[i] < 0.01 {
                     smooth[i] = 0.0;
                 }
                 any |= smooth[i] > 0.0;

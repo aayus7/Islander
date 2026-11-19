@@ -68,8 +68,11 @@ function skip(s: Src, dir: 1 | -1) {
   s.sampledAt = Date.now();
 }
 
-// Auto-advance when a track ends.
-setInterval(() => {
+// Auto-advance when a track ends. (Started on first subscribe, so the real app — which
+// never uses the mock — doesn't tick it.)
+let advancing = 0;
+const startAdvance = () => (advancing ||= window.setInterval(advanceTick, 500));
+function advanceTick() {
   let changed = false;
   for (const s of sources) {
     if (s.playing && pos(s) >= s.list[s.index].duration) {
@@ -78,7 +81,7 @@ setInterval(() => {
     }
   }
   if (changed) emit();
-}, 500);
+}
 
 // Fake "what the speakers are playing" for the preview: a 118 bpm kick, a bassline and hats.
 const audioListeners = new Set<(l: number[]) => void>();
@@ -119,6 +122,7 @@ export const mock = {
     };
   },
   subscribe(cb: (s: MediaState) => void) {
+    startAdvance();
     listeners.add(cb);
     cb(snapshot());
     return () => void listeners.delete(cb);

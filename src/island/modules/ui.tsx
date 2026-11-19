@@ -1,18 +1,96 @@
 // Shared iOS-style building blocks for the island's modules.
-import { AnimatePresence, motion } from "motion/react";
-import { useId, useRef } from "react";
+import { AnimatePresence, motion, useAnimate } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 
-/** iOS segmented control: grey track, a raised thumb that slides between segments. */
+/**
+ * iOS segmented control with a "liquid" thumb: when you pick another segment the
+ * thumb lifts and swells a little, stretches toward where it's going, then settles
+ * with a soft wobble — like the iOS 26 selectors. Labels cross-fade their weight.
+ */
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange(v: T): void }) {
-  const id = useId();
+  const track = useRef<HTMLDivElement>(null);
+  const [segW, setSegW] = useState(0);
+  const [scope, animate] = useAnimate<HTMLSpanElement>();
+  const idx = Math.max(0, options.findIndex((o) => o.value === value));
+  const prev = useRef(idx);
+  useEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const measure = () => setSegW((el.clientWidth - 4) / options.length);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [options.length]);
+  useEffect(() => {
+    if (!scope.current || !segW) return;
+    const from = prev.current;
+    prev.current = idx;
+    if (from === idx) {
+      animate(scope.current, { x: idx * segW }, { duration: 0 });
+      return;
+    }
+    const dist = Math.abs(idx - from);
+    // Glide across with a springy settle…
+    animate(scope.current, { x: idx * segW }, { type: "spring", stiffness: 340, damping: 31, mass: 0.9 });
+    // …while it lifts, swells and stretches in the direction of travel, then relaxes.
+    animate(
+      scope.current,
+      { scaleX: [1, 1.12 + 0.05 * dist, 0.98, 1], scaleY: [1, 1.14, 0.98, 1] },
+      { duration: 0.5 + 0.06 * dist, times: [0, 0.32, 0.72, 1], ease: ["easeOut", "easeInOut", "easeOut"] },
+    );
+    animate(
+      scope.current,
+      { boxShadow: ["0 3px 8px rgba(0,0,0,0.12)", "0 8px 22px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(255,255,255,0.18)", "0 3px 8px rgba(0,0,0,0.12)"] },
+      { duration: 0.5, times: [0, 0.35, 1] },
+    );
+  }, [idx, segW]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="seg" onClick={(e) => e.stopPropagation()}>
+    <div ref={track} className="seg" onClick={(e) => e.stopPropagation()}>
+      {segW > 0 && <span ref={scope} className="seg-thumb liquid" style={{ width: segW }} />}
       {options.map((o) => (
         <button key={o.value} className={`seg-item ${o.value === value ? "on" : ""}`} onClick={() => onChange(o.value)}>
-          {o.value === value && <motion.span layoutId={`seg-${id}`} className="seg-thumb" transition={{ type: "spring", stiffness: 500, damping: 38 }} />}
-          <span className="seg-label">{o.label}</span>
+          <motion.span className="seg-label" whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 600, damping: 30 }}>
+            {o.label}
+          </motion.span>
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Content that changes with a segmented control: the new view slides in from the
+ * side of the segment you picked (left/right), the old one slides out the other
+ * way, with a soft blur and a hint of depth — like switching pages in iOS.
+ */
+export function ModeSwitch({ k, index, children, className }: { k: string; index: number; children: React.ReactNode; className?: string }) {
+  const prev = useRef(index);
+  const dir = useRef(1);
+  if (prev.current !== index) {
+    dir.current = index > prev.current ? 1 : -1;
+    prev.current = index;
+  }
+  return (
+    <div className={`mode-switch ${className ?? ""}`}>
+      <AnimatePresence mode="popLayout" initial={false} custom={dir.current}>
+        <motion.div
+          key={k}
+          className="mode-pane"
+          custom={dir.current}
+          variants={{
+            in: (d: number) => ({ x: d * 42, opacity: 0, scale: 0.97, filter: "blur(6px)" }),
+            show: { x: 0, opacity: 1, scale: 1, filter: "blur(0px)" },
+            out: (d: number) => ({ x: d * -42, opacity: 0, scale: 0.97, filter: "blur(6px)" }),
+          }}
+          initial="in"
+          animate="show"
+          exit="out"
+          transition={{ type: "spring", stiffness: 360, damping: 32, opacity: { duration: 0.2 }, filter: { duration: 0.24 } }}
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
@@ -113,34 +191,52 @@ export function NumericText({ value, dir, className, style }: { value: string; d
   }
   const d = lastDir.current;
   const chars = [...value];
+  // Digits roll only while the layout stays the same (separators in the same places,
+  // counted from the right — so 9:59 → 10:00 still rolls). A different format
+  // (25:00 → 0:00.0 when switching Focus → Stopwatch) swaps the whole value at once,
+  // with the old one lifted out of the layout so nothing is left half-spaced.
+  const shape = chars.map((c, i) => (/\d/.test(c) ? "" : `${chars.length - i}${c}`)).join("");
   return (
-    <span className={`numeric ${className ?? ""}`} style={style} aria-label={value}>
-      {chars.map((ch, i) => {
-        // Key from the right so "9" → "10" keeps the ones digit in place.
-        const slot = chars.length - i;
-        return (
-          <span key={slot} className="num-slot">
-            <AnimatePresence mode="popLayout" initial={false} custom={d}>
-              <motion.span
-                key={ch}
-                className="num-ch"
-                custom={d}
-                variants={{
-                  enter: (k: number) => ({ y: k > 0 ? "70%" : "-70%", opacity: 0, filter: "blur(3px)" }),
-                  center: { y: "0%", opacity: 1, filter: "blur(0px)" },
-                  exit: (k: number) => ({ y: k > 0 ? "-70%" : "70%", opacity: 0, filter: "blur(3px)" }),
-                }}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8, opacity: { duration: 0.18 } }}
-              >
-                {ch}
-              </motion.span>
-            </AnimatePresence>
-          </span>
-        );
-      })}
+    <span className={`numeric-wrap ${className ?? ""}`} style={style} aria-label={value}>
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.span
+          key={shape}
+          className="numeric"
+          initial={{ opacity: 0, scale: 0.92, filter: "blur(6px)" }}
+          animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, scale: 0.92, filter: "blur(6px)", transition: { duration: 0.16 } }}
+          transition={{ type: "spring", stiffness: 420, damping: 34, opacity: { duration: 0.2 } }}
+          style={{ originX: 0 }}
+        >
+          {chars.map((ch, i) => {
+            // Key from the right so "9" → "10" keeps the ones digit in place.
+            const slot = chars.length - i;
+            return (
+              <span key={slot} className="num-slot">
+                {/* Old and new digit share one grid cell, so a rolling digit never takes extra width. */}
+                <AnimatePresence initial={false} custom={d}>
+                  <motion.span
+                    key={ch}
+                    className="num-ch"
+                    custom={d}
+                    variants={{
+                      enter: (k: number) => ({ y: k > 0 ? "70%" : "-70%", opacity: 0, filter: "blur(3px)" }),
+                      center: { y: "0%", opacity: 1, filter: "blur(0px)" },
+                      exit: (k: number) => ({ y: k > 0 ? "-70%" : "70%", opacity: 0, filter: "blur(3px)", transition: { duration: 0.22, ease: "easeIn" } }),
+                    }}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={{ type: "spring", stiffness: 420, damping: 34, mass: 0.8, opacity: { duration: 0.18 } }}
+                  >
+                    {ch}
+                  </motion.span>
+                </AnimatePresence>
+              </span>
+            );
+          })}
+        </motion.span>
+      </AnimatePresence>
     </span>
   );
 }

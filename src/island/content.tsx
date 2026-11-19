@@ -9,7 +9,8 @@ import { Artwork, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, 
 /* ---------- Compact: art on the left, waveform on the right ---------- */
 
 export function MediaCompact({ session, width, height }: { session: MediaSession; width: number; height: number }) {
-  const color = useArtColor(session.artwork, session.app);
+  // No artwork? Take the colour from the app's own icon (purple for mpv, green for Spotify…).
+  const color = useArtColor(session.artwork ?? session.icon ?? null, session.app);
   return (
     <div className="row" style={{ width, height, padding: "0 9px 0 8px", justifyContent: "space-between" }}>
       <Artwork src={session.artwork} size={23} radius={6.5} />
@@ -70,7 +71,7 @@ export function MediaExpanded({
 
   useNow(!!live?.playing, 250); // re-render the time labels 4×/s
   const flipDir = useRef(1); // 1 = next (flip left), -1 = previous (flip right)
-  const color = useArtColor(session?.artwork ?? null, session?.app ?? "");
+  const color = useArtColor(session?.artwork ?? session?.icon ?? null, session?.app ?? "");
 
   if (!session) {
     return (
@@ -83,6 +84,16 @@ export function MediaExpanded({
 
   const cur = live ?? session;
   const dur = session.duration;
+
+  // Video players (mpv, VLC…) and live-less videos: iOS-style "back 10 / forward 10"
+  // instead of previous/next track, like the TV and Podcasts apps.
+  const skipMode = !session.live && dur > 0 && isVideoPlayer(session);
+  const skipBy = (delta: number) => {
+    const now = livePosition(cur, Date.now());
+    const target = Math.max(0, Math.min(dur - 0.5, now + delta));
+    setPending({ id: session.id, at: Date.now(), pos: target, playing: cur.playing });
+    onCommand(`seek:${target}`);
+  };
 
   return (
     <div className="media-x" style={{ width, minHeight: height }}>
@@ -159,11 +170,22 @@ export function MediaExpanded({
       </AnimatePresence>
 
       <div className="controls" style={{ marginTop: dur > 0 || session.live ? 10 : 20 }}>
+        {/* (video players get ±10 s buttons instead of previous/next) */}
         <SourceIcons sessions={sessions} activeId={session.id} onSelect={onSelect} />
         <div className="row" style={{ gap: 16 }}>
-          <CtrlButton disabled={!session.canPrev} onClick={() => { flipDir.current = -1; onCommand("prev"); }}>
-            <SkipIcon dir={-1} size={30} />
-          </CtrlButton>
+          {skipMode ? (
+            <CtrlButton disabled={!session.canSeek} onClick={() => skipBy(-10)}>
+              <SymbolSwap k={`b10-${session.id}`}>
+                <Skip10Icon dir={-1} size={30} />
+              </SymbolSwap>
+            </CtrlButton>
+          ) : (
+            <CtrlButton disabled={!session.canPrev} onClick={() => { flipDir.current = -1; onCommand("prev"); }}>
+              <SymbolSwap k={`prev-${session.id}`}>
+                <SkipIcon dir={-1} size={30} />
+              </SymbolSwap>
+            </CtrlButton>
+          )}
           <CtrlButton
             big
             onClick={() => {
@@ -171,11 +193,21 @@ export function MediaExpanded({
               onCommand("toggle");
             }}
           >
-            {cur.playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}
+            <SymbolSwap k={`${cur.playing ? "pause" : "play"}-${session.id}`}>{cur.playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}</SymbolSwap>
           </CtrlButton>
-          <CtrlButton disabled={!session.canNext} onClick={() => { flipDir.current = 1; onCommand("next"); }}>
-            <SkipIcon dir={1} size={30} />
-          </CtrlButton>
+          {skipMode ? (
+            <CtrlButton disabled={!session.canSeek} onClick={() => skipBy(10)}>
+              <SymbolSwap k={`f10-${session.id}`}>
+                <Skip10Icon dir={1} size={30} />
+              </SymbolSwap>
+            </CtrlButton>
+          ) : (
+            <CtrlButton disabled={!session.canNext} onClick={() => { flipDir.current = 1; onCommand("next"); }}>
+              <SymbolSwap k={`next-${session.id}`}>
+                <SkipIcon dir={1} size={30} />
+              </SymbolSwap>
+            </CtrlButton>
+          )}
         </div>
         <div style={{ width: 86, display: "flex", justifyContent: "flex-end" }}>
           <OutputButton kind={deviceKind(current?.name ?? "")} accent={color} active={routesOpen} onClick={() => setRoutesOpen((o) => !o)} />
@@ -223,7 +255,7 @@ function Scrubber({ s, dur, canSeek, onSeek }: { s: MediaSession; dur: number; c
       </motion.span>
       <div
         className={`scrub ${canSeek ? "seekable" : ""}`}
-        onPointerDown={(e) => {
+        data-no-lift="" onPointerDown={(e) => {
           if (!canSeek || (e.button !== 0 && e.button !== 2)) return;
           e.stopPropagation();
           e.preventDefault();
@@ -696,6 +728,29 @@ function hash(t: string) {
   return Math.abs(h);
 }
 
+/**
+ * SF Symbols "replace" transition: when a control's symbol changes (play ⇄ pause,
+ * or switching sources swaps ⏮/⏭ for ±10 s), the old one shrinks away with a blur
+ * while the new one grows in — and every control re-plays it when the source
+ * changes, in step with the artwork flip.
+ */
+function SymbolSwap({ k, children }: { k: string; children: React.ReactNode }) {
+  return (
+    <AnimatePresence mode="popLayout" initial={false}>
+      <motion.span
+        key={k}
+        className="sym-swap"
+        initial={{ scale: 0.4, opacity: 0, filter: "blur(4px)" }}
+        animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+        exit={{ scale: 0.4, opacity: 0, filter: "blur(4px)", transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
+        transition={{ type: "spring", stiffness: 420, damping: 24, opacity: { duration: 0.18 }, filter: { duration: 0.2 } }}
+      >
+        {children}
+      </motion.span>
+    </AnimatePresence>
+  );
+}
+
 function CtrlButton({ children, onClick, disabled, big }: { children: React.ReactNode; onClick(): void; disabled?: boolean; big?: boolean }) {
   const { springs } = useSettings();
   const s = big ? 46 : 40;
@@ -703,8 +758,11 @@ function CtrlButton({ children, onClick, disabled, big }: { children: React.Reac
     <motion.button
       className="ctrl"
       disabled={disabled}
-      style={{ width: s, height: s }}
-      whileTap={{ scale: 0.84, backgroundColor: "rgba(255,255,255,0.14)" }}
+      style={{ width: s, height: s, backgroundColor: "rgba(255,255,255,0)" }}
+      // Hover: a soft round highlight fades in behind the symbol and it lifts a little
+      // (like the media controls on macOS); pressing squeezes it.
+      whileHover={disabled ? undefined : { scale: 1.07, backgroundColor: "rgba(255,255,255,0.11)" }}
+      whileTap={disabled ? undefined : { scale: 0.84, backgroundColor: "rgba(255,255,255,0.18)" }}
       transition={springs.press}
       onClick={(e) => {
         e.stopPropagation();
@@ -759,5 +817,28 @@ export function TodayExpanded({ width, height }: { width: number; height: number
         <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: -0.5, fontVariantNumeric: "tabular-nums" }}>{time}</div>
       </div>
     </div>
+  );
+}
+
+const VIDEO_PLAYERS = /^(mpv|mpv\.net|vlc|vlc media player|mpc-hc|mpc-be|media player classic|potplayer|potplayermini|potplayermini64|kmplayer|gom player|iina|movies & tv|films & tv|plex|jellyfin media player|kodi|stremio)$/i;
+
+/** Apps where skipping ±10 s makes more sense than previous/next track. */
+function isVideoPlayer(s: MediaSession) {
+  const name = (s.app || "").trim();
+  return VIDEO_PLAYERS.test(name) || /(^|[\\/])(mpv|vlc|mpc-hc64|mpc-be64|potplayermini64)\.exe$/i.test(s.id || "");
+}
+
+/** "Back 10" / "forward 10": an open arc over the top, arrowhead at the end, bold 10 underneath. */
+function Skip10Icon({ size = 30, dir }: { size?: number; dir: 1 | -1 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 30 30" fill="none">
+      <g style={{ transform: dir < 0 ? "scaleX(-1)" : undefined, transformOrigin: "15px 15px" }}>
+        <path d="M6.39 17.01 A9.5 9.5 0 1 1 24.41 14.32" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M20.6 13.2 L28.1 13.0 L24.5 19.6 Z" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinejoin="round" />
+      </g>
+      <text x="15" y="27.2" textAnchor="middle" fontSize="10" fontWeight="800" fill="currentColor" letterSpacing="-0.5" fontFamily="var(--font)">
+        10
+      </text>
+    </svg>
   );
 }

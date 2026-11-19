@@ -28,6 +28,59 @@ fn file(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_data_dir().ok().map(|d| d.join("shelf.json"))
 }
 
+/// Where the Shelf keeps its own copies of files that would otherwise vanish: a photo
+/// dragged from a browser arrives as a temporary file, which the browser deletes as soon
+/// as the drag ends.
+fn keep_dir(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|d| d.join("shelf-files"))
+}
+
+fn is_temp(p: &str) -> bool {
+    let l = p.to_lowercase().replace('/', "\\");
+    let t = std::env::temp_dir().to_string_lossy().to_lowercase().replace('/', "\\");
+    let t = t.trim_end_matches('\\');
+    (!t.is_empty() && l.starts_with(&format!("{t}\\"))) || l.contains("\\appdata\\local\\temp\\") || l.contains("\\inetcache\\") || l.contains("\\temporary internet files\\")
+}
+
+/// Swap temporary files for copies the Shelf owns (anything else is left as it is).
+/// Called the moment something is dropped, while the browser's temp file still exists.
+pub fn rescue(app: &AppHandle, paths: Vec<String>) -> Vec<String> {
+    let Some(dir) = keep_dir(app) else { return paths };
+    paths
+        .into_iter()
+        .map(|p| {
+            let src = Path::new(&p);
+            if !is_temp(&p) || !src.is_file() {
+                return p;
+            }
+            let Some(name) = src.file_name() else { return p };
+            let dest_dir = dir.join(new_id());
+            let dest = dest_dir.join(name);
+            match std::fs::create_dir_all(&dest_dir).and_then(|_| std::fs::copy(src, &dest)) {
+                Ok(_) => {
+                    eprintln!("[shelf] kept a copy of temporary file {p}");
+                    dest.to_string_lossy().to_string()
+                }
+                Err(e) => {
+                    eprintln!("[shelf] couldn't copy temporary file {p}: {e}");
+                    p
+                }
+            }
+        })
+        .collect()
+}
+
+/// Deletes the Shelf's own copy behind a removed item (never a file of yours).
+fn forget_copy(app: &AppHandle, path: &str) {
+    let Some(dir) = keep_dir(app) else { return };
+    let p = Path::new(path);
+    if let Some(parent) = p.parent() {
+        if parent.parent() == Some(dir.as_path()) {
+            let _ = std::fs::remove_dir_all(parent);
+        }
+    }
+}
+
 fn load(app: &AppHandle) {
     let mut loaded = LOADED.lock().unwrap();
     if *loaded {
@@ -38,6 +91,33 @@ fn load(app: &AppHandle) {
         // Forget things that were deleted or moved while we were away.
         *ITEMS.lock().unwrap() = items.into_iter().filter(|i| Path::new(&i.path).exists()).collect();
     }
+    // Copies no item uses any more (removed while we weren't running, or past 40 items).
+    if let Some(dir) = keep_dir(app) {
+        let used: Vec<String> = ITEMS.lock().unwrap().iter().map(|i| i.path.to_lowercase()).collect();
+        for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let sub = e.path().to_string_lossy().to_lowercase();
+            if !used.iter().any(|u| u.starts_with(&format!("{sub}\\")) || u.starts_with(&format!("{sub}/"))) {
+                let _ = std::fs::remove_dir_all(e.path());
+            }
+        }
+    }
+    // And while running: a file deleted (or moved) in Explorer leaves the Shelf within ~2 s.
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        prune(&app);
+    });
+}
+
+/// Drops items whose file or folder no longer exists. A handful of stat calls (≤ 40 items).
+fn prune(app: &AppHandle) {
+    let paths: Vec<(String, String)> = ITEMS.lock().unwrap().iter().map(|i| (i.id.clone(), i.path.clone())).collect();
+    let gone: Vec<String> = paths.into_iter().filter(|(_, p)| !Path::new(p).exists()).map(|(id, _)| id).collect();
+    if gone.is_empty() {
+        return;
+    }
+    ITEMS.lock().unwrap().retain(|i| !gone.contains(&i.id));
+    save_and_emit(app);
 }
 
 fn save_and_emit(app: &AppHandle) {
@@ -104,6 +184,7 @@ pub fn shelf_list(app: AppHandle) -> Vec<ShelfItem> {
 pub async fn shelf_add(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
     load(&app);
     eprintln!("[shelf] adding {} item(s)", paths.len());
+    let paths = rescue(&app, paths);
     let fresh: Vec<ShelfItem> = tauri::async_runtime::spawn_blocking(move || {
         let have: Vec<String> = ITEMS.lock().unwrap().iter().map(|i| i.path.to_lowercase()).collect();
         paths.iter().filter(|p| !have.contains(&p.to_lowercase())).filter_map(|p| describe(p)).collect()
@@ -125,12 +206,16 @@ pub async fn shelf_add(app: AppHandle, paths: Vec<String>) -> Result<(), String>
 
 #[tauri::command]
 pub fn shelf_remove(app: AppHandle, id: String) {
+    let gone: Vec<String> = ITEMS.lock().unwrap().iter().filter(|i| i.id == id).map(|i| i.path.clone()).collect();
+    gone.iter().for_each(|p| forget_copy(&app, p));
     ITEMS.lock().unwrap().retain(|i| i.id != id);
     save_and_emit(&app);
 }
 
 #[tauri::command]
 pub fn shelf_clear(app: AppHandle) {
+    let gone: Vec<String> = ITEMS.lock().unwrap().iter().map(|i| i.path.clone()).collect();
+    gone.iter().for_each(|p| forget_copy(&app, p));
     ITEMS.lock().unwrap().clear();
     save_and_emit(&app);
 }

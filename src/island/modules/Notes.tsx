@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useRef, useState } from "react";
 import { bridge } from "../../bridge";
 import { persistent, uid, useStore } from "../../lib/persist";
-import { Glyph, Segmented } from "./ui";
+import { Glyph, ModeSwitch, Segmented } from "./ui";
 
 export interface Todo {
   id: string;
@@ -36,18 +36,9 @@ export function NotesPanel({ width, height }: { width: number; height: number })
           { value: "notes", label: "Notes" },
         ]}
       />
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={n.view}
-          className="notes-body"
-          initial={{ opacity: 0, filter: "blur(4px)" }}
-          animate={{ opacity: 1, filter: "blur(0px)" }}
-          exit={{ opacity: 0, filter: "blur(4px)" }}
-          transition={{ duration: 0.16 }}
-        >
-          {n.view === "notes" ? <Scratchpad text={n.text} /> : <TodoList />}
-        </motion.div>
-      </AnimatePresence>
+      <ModeSwitch k={n.view} index={n.view === "todo" ? 0 : 1} className="notes-body">
+        {n.view === "notes" ? <Scratchpad text={n.text} /> : <TodoList />}
+      </ModeSwitch>
     </div>
   );
 }

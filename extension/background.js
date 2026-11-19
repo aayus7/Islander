@@ -191,6 +191,7 @@ function connect() {
       return;
     }
     if (m.type === "cmd") runCommand(m);
+    else if (m.type === "dl_cancel" && dl) Promise.resolve(dl.cancel(Number(m.id))).catch(() => {});
   };
   ws.onclose = () => {
     clearInterval(pingTimer);

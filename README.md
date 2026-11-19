@@ -4,7 +4,7 @@ An iPhone-style Dynamic Island for Windows 10/11: live media, timers, notificati
 shelf, clipboard history, system stats, Control Center and a "Search or Ask" bar you can type or talk
 to. It tries to match the real iOS island's look and motion as closely as possible.
 
-Built with **Tauri 2 (Rust)** + **React 19** + **Motion**. Current version: **0.8.1**.
+Built with **Tauri 2 (Rust)** + **React 19** + **Motion**. Current version: **0.9.1**.
 
 ---
 
@@ -41,7 +41,7 @@ Built with **Tauri 2 (Rust)** + **React 19** + **Motion**. Current version: **0.
 | **Today** | Month calendar, a weather glance (Open-Meteo, no key) with a sun or moon that playfully follows your cursor, and your next reminders. |
 | **Timer & Focus** | iOS Clock-style timer, stopwatch (with laps) and Focus (Pomodoro). Keeps running as a live pill while collapsed and chimes when done. |
 | **Notes & To-Do** | A quick scratchpad and a Reminders-style checklist, saved automatically. |
-| **Shelf** | Drop files, folders or images on the island, then drag them out into any app. Open, show in Explorer, remove, and convert images to JPG/PNG/WebP. |
+| **Shelf** | Drop files, folders or images on the island, then drag them out into any app. Open, show in Explorer, remove, and convert images to JPG/PNG/WebP. **Nearby sharing**: phones and computers running [LocalSend](https://localsend.org) show up under the Shelf; tap one to send your files, or receive from them (you're asked first; files land in Downloads and on the Shelf). |
 | **Clipboard** | History of copied text, links, images and files. Click to copy again, drag out, pin, delete. Content password managers mark as private is never recorded. |
 | **System** | Activity-style rings for CPU, GPU, memory and disk, plus live upload/download speed. |
 | **Controls** | Control Center: Wi-Fi and Bluetooth (with pages to join networks and connect headphones), brightness and volume sliders, Airplane mode, Do Not Disturb, Light/Dark, Screenshot, Lock, Sleep, and pinned apps, folders and URLs. |
@@ -133,7 +133,7 @@ src/
   island/content.tsx       Now Playing (compact & expanded), output picker
   island/AiPanel.tsx       Search or Ask (typing, voice, answers)
   island/Glass.tsx         WebGL liquid glass
-  island/modules/          Today, Clock, Notes, Shelf, Clipboard, Stats, Controls, Downloads,
+  island/modules/          Today, Clock, Notes, Shelf, Nearby, Clipboard, Stats, Controls, Downloads,
                            Devices (AirPods videos), Banners, Hud, Privacy, shared iOS UI parts
   lib/                     springs, settings, AI client & session, posters, timer, weather, sky
   Zones.tsx                drop zones shown while moving the island
@@ -145,6 +145,8 @@ src-tauri/src/
   media.rs / audio.rs      media sessions, artwork, real-audio waveform
   posters.rs               movie & series posters (Cinemeta / MetaHub)
   mic.rs / speech.rs       voice recording, Windows dictation
+  localsend_core.rs        LocalSend protocol v2: discovery, receiving server, sending
+  localsend.rs             nearby sharing in the island (events, HTTPS to phones, Shelf)
   radios.rs                Wi-Fi, Bluetooth, Airplane mode
   dlmgr.rs                 Mister Download Manager & IDM progress
   ext.rs                   browser-extension bridge
@@ -167,6 +169,8 @@ Everything runs locally except:
 - **AI questions and voice clips**, sent to Islander's free service. It passes them to Google Gemini or
   Cloudflare's own AI models, and looks things up on Wikipedia, Google News, DuckDuckGo and ESPN. Gemini's
   free tier may use questions to improve Google's products, so avoid private information.
+- **Nearby sharing**, only on your local network: Islander announces itself to LocalSend devices on
+  the same Wi-Fi and listens on port 53317. Nothing is received without your OK.
 - **Weather** (Open-Meteo), **posters** (Cinemeta/MetaHub), **update checks** (GitHub) and website icons
   for pinned URLs.
 
@@ -177,9 +181,20 @@ capture for liquid glass is used live and never saved. The microphone is only on
 Islander ships with **Inter** and uses it by default. SF Pro can't be bundled (Apple's licence limits it
 to Apple platforms); people who installed it themselves can pick **System** in Settings → Appearance.
 
+## License
+Islander is free software: you can redistribute it and/or modify it under the terms of the
+**GNU General Public License v3.0 or later** (see [`LICENSE`](LICENSE)). Anyone who shares a modified
+version must share its source under the same license.
+
+Download the installer from [Releases](https://github.com/aayus7/Islander/releases/latest).
+
 ## Credits & licences
 - **AirPods & Beats animations**: [AirPodsDesktop](https://github.com/SpriteOvO/AirPodsDesktop) by
   SpriteOvO, GPL-3.0 (licence in `public/devices/`).
 - **Inter** typeface: The Inter Project Authors, SIL Open Font License 1.1 (licence in `src/assets/fonts/`).
 - **Weather**: Open-Meteo, CC BY 4.0. **Posters**: Cinemeta and MetaHub.
 - **Speech-to-text**: OpenAI Whisper on Cloudflare Workers AI.
+- **Nearby sharing** works with [LocalSend](https://github.com/localsend/localsend) (Apache-2.0) by
+  implementing its open [protocol](https://github.com/localsend/protocol); no LocalSend code is bundled.
+- **Screen recording** uses a modified copy of [windows-capture](https://github.com/NiiightmareXD/windows-capture)
+  (MIT, licence in `src-tauri/vendor/windows-capture/`).

@@ -35,6 +35,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     bridge.resetSettings().then(setSettings).catch(console.error);
   }, []);
 
+  // Typeface for every window (island, Settings, overlays).
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--font",
+      settings.font === "system"
+        ? '-apple-system, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif'
+        : '"Islander Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif',
+    );
+  }, [settings.font]);
+
   const springs = useMemo(() => springsFor(settings.animStyle, settings.animSpeed), [settings.animStyle, settings.animSpeed]);
 
   return <SettingsCtx.Provider value={{ settings, springs, update, reset }}>{children}</SettingsCtx.Provider>;

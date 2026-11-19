@@ -17,21 +17,74 @@ export const HUD_SIZE = { w: 250, h: 37, r: 18.5 };
 export const MUTE_SIZE = { w: 268, h: 40, r: 20 };
 export const RED = "#ff453a";
 
+// The island's own controls (and the open island) shouldn't trigger the HUD:
+// changing the volume from the Controls slider would otherwise flash a volume pill
+// the moment the island closes.
+let quietUntil = 0;
+const clearers = new Set<() => void>();
+/** Ignore HUD events for `ms` (Infinity = until called again) and hide any showing. */
+export function quietHud(ms: number) {
+  quietUntil = ms === Infinity ? Infinity : Date.now() + ms;
+  if (ms > 0) clearers.forEach((c) => c());
+}
+
 export function useHud(): HudData | null {
   const { settings } = useSettings();
   const [hud, setHud] = useState<HudData | null>(null);
   const t = useRef(0);
   const seq = useRef(0);
+  const cur = useRef<HudData | null>(null);
+  const muteTimer = useRef(0);
+  const lastVolumeAt = useRef(0);
   useEffect(() => {
     if (!settings.hud) {
       setHud(null);
       return;
     }
-    return on<Omit<HudData, "seq">>("hud://show", (h) => {
-      setHud({ ...h, seq: ++seq.current });
+    const clear = () => {
       clearTimeout(t.current);
-      t.current = window.setTimeout(() => setHud(null), h.kind === "caps" || h.kind === "num" ? 1300 : 1600);
+      clearTimeout(muteTimer.current);
+      cur.current = null;
+      setHud(null);
+    };
+    clearers.add(clear);
+    const show = (h: Omit<HudData, "seq">) => {
+      const prev = cur.current;
+      // Same pill, new value: update in place (no re-entry animation).
+      const same = prev && prev.kind === h.kind && (h.kind !== "mute" || prev.on === h.on);
+      const next = { ...h, seq: same ? prev.seq : ++seq.current };
+      cur.current = next;
+      setHud(next);
+      clearTimeout(t.current);
+      t.current = window.setTimeout(() => {
+        cur.current = null;
+        setHud(null);
+      }, h.kind === "caps" || h.kind === "num" ? 1300 : 1600);
+    };
+    const off = on<Omit<HudData, "seq">>("hud://show", (h) => {
+      if (Date.now() < quietUntil) return;
+      if (h.kind === "mute") {
+        // Muting that comes with a volume change (Windows/drivers auto-mute at 0 %
+        // and unmute on the way up) belongs to the volume pill — only the mute key
+        // itself gets the Ring/Silent pill.
+        if (Date.now() - lastVolumeAt.current < 450 && cur.current?.kind === "volume") {
+          lastVolumeAt.current = Date.now();
+          show({ kind: "volume", value: h.value, on: h.on });
+          return;
+        }
+        // Some drivers flap mute on/off — only show where it settles.
+        clearTimeout(muteTimer.current);
+        muteTimer.current = window.setTimeout(() => show(h), 140);
+        return;
+      }
+      if (h.kind === "volume") lastVolumeAt.current = Date.now();
+      clearTimeout(muteTimer.current);
+      show(h);
     });
+    return () => {
+      off();
+      clearers.delete(clear);
+    };
   }, [settings.hud]);
   return hud;
 }
@@ -65,7 +118,7 @@ export function Hud({ hud }: { hud: HudData }) {
   );
 }
 
-function Speaker({ level, muted }: { level: number; muted: boolean }) {
+export function Speaker({ level, muted }: { level: number; muted: boolean }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor" />
@@ -81,7 +134,7 @@ function Speaker({ level, muted }: { level: number; muted: boolean }) {
   );
 }
 
-function Sun() {
+export function Sun() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />

@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Islander</title>
+    <!-- Inline so the overlay never shows scrollbars, even for the instant the main
+         stylesheet is being swapped during development. -->
+    <style>html, body, #root { margin: 0; height: 100%; overflow: hidden; background: transparent; } ::-webkit-scrollbar { display: none; }</style>
   </head>
   <body>
     <div id="root"></div>

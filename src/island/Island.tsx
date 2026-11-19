@@ -3,22 +3,35 @@ import { getSvgPath } from "figma-squircle";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bridge, type MediaAction, type MediaSession } from "../bridge";
 import { useSettings } from "../lib/settings";
-import { islandColor } from "../settings-types";
+import { ALL_MODULES, islandColor } from "../settings-types";
 import { MediaCompact, MediaExpanded, MediaMinimal } from "./content";
 import type { ModuleId } from "../settings-types";
 import { isActive as clockActive, startClockTicker, useClock } from "../lib/timer";
 import { ClockCompact, ClockMinimal, ClockPanel } from "./modules/Clock";
 import { NotesPanel } from "./modules/Notes";
 import { TodayPanel } from "./modules/Today";
+import { WeatherPanel } from "./modules/Weather";
 import { ShelfPanel, useShelf, useShelfDrop } from "./modules/Shelf";
 import { ClipboardPanel, useClips } from "./modules/Clipboard";
 import { StatsPanel } from "./modules/Stats";
 import { ControlsPanel } from "./modules/Controls";
-import { Banner, useBanners, BANNER_H } from "./modules/Banners";
-import { Hud, useHud, HUD_SIZE, MUTE_SIZE } from "./modules/Hud";
+import { Banner, useBanners, BANNER_H, pushBanner } from "./modules/Banners";
+import { on, send } from "../lib/native";
+import { Hud, useHud, quietHud, HUD_SIZE, MUTE_SIZE } from "./modules/Hud";
+import { DeviceActivity, PowerActivity, useActivity, DEVICE_SIZE, POWER_SIZE } from "./modules/Devices";
 import { PrivacyDots } from "./modules/Privacy";
-import { DownloadCompact, DownloadMinimal, useDownloads } from "./modules/Downloads";
+import { DownloadCompact, DownloadMinimal, DownloadsPanel, downloadsPanelHeight, useDownloads } from "./modules/Downloads";
+import { INCOMING_SIZE, IncomingCard, NEARBY_H } from "./modules/Nearby";
+import { useNearby } from "../lib/nearby";
 import { AiPanel, AI_BAR_H, type AiView } from "./AiPanel";
+import { AiThinking, THINKING_SIZE } from "./AiThinking";
+import { useAiSession } from "../lib/aiSession";
+import { TabDock, DOCK_GAP, DOCK_H } from "./TabDock";
+import { COMPACT_REC, REC_PANEL, RecCompact, RecPanel } from "./modules/ScreenRec";
+import { recActive, useScreenRec } from "../lib/screenrec";
+import { SIDE, MediaCompactV, ClockCompactV, DownloadCompactV, HudV, RecCompactV } from "./SidePill";
+import type { Dock, DockAlong } from "../settings-types";
+import { pinsPageOpen } from "./modules/Controls";
 import { clearGlassFrames, LiquidGlass } from "./Glass";
 
 /* ---------------- Geometry ---------------- */
@@ -34,10 +47,50 @@ const SMOOTHING = 0.6; // iOS "continuous corner" smoothing
 // settles — that was the "twitch" at the end of transitions.)
 const FRAME_W = 460;
 const FRAME_H = 440; // tall enough for the AI panel
+// The island's window (CSS px before the size scale; same as WIN_W/WIN_H in main.rs).
+// The frame sits in its middle; for each dock the whole layer is shifted so the island
+// hugs the matching window edge, and the window hugs that screen edge.
+const WIN_W = 560;
+const WIN_H = 480;
+/** Extra room below the frame for the open island's shadow to fade out. */
+const SHADOW_PAD = WIN_H - 440;
+const FRAME_X = (WIN_W - FRAME_W) / 2;
+const EDGE = 8; // gap to the screen edge it's docked on
+const SIDE_M = 14; // inset at the start/end of an edge
 
-type Mode = "idle" | "compact" | "expanded" | "ai" | "hud" | "banner";
+// Collapsed live activities on the top/bottom edge: just wide enough for what they show
+// (artwork + waveform is short; a download needs room for its name).
+const COMPACT_MEDIA = { w: 184, h: 37, r: 18.5 };
+const COMPACT_CLOCK = { w: 204, h: 37, r: 18.5 };
+
+/** No-overshoot spring for shape changes while the island is being moved. */
+const CALM = { type: "spring" as const, stiffness: 520, damping: 46, mass: 1 };
+
+/** Top-left of the island inside the window for a dock (w/h = current size). */
+function islandOrigin(dock: Dock, along: DockAlong, w: number, h: number, below: number, above: number) {
+  const horiz = dock === "top" || dock === "bottom";
+  const x = horiz
+    ? along === "start"
+      ? SIDE_M
+      : along === "end"
+        ? WIN_W - SIDE_M - w
+        : (WIN_W - w) / 2
+    : dock === "left"
+      ? EDGE
+      : WIN_W - EDGE - w;
+  const total = h + below + above;
+  const y = horiz
+    ? dock === "top"
+      ? TOP
+      : WIN_H - TOP - h
+    : (along === "start" ? SIDE_M : along === "end" ? WIN_H - SIDE_M - total : (WIN_H - total) / 2) + above;
+  return { x, y };
+}
+
+type Mode = "idle" | "compact" | "expanded" | "ai" | "hud" | "banner" | "activity" | "incoming" | "rec";
 const AI_W = 440;
-type Tab = ModuleId;
+type Tab = ModuleId | "downloads";
+type WarmTab = Exclude<Tab, "ai">;
 
 interface Size { w: number; h: number; r: number }
 
@@ -56,14 +109,16 @@ const SIZES: Record<"idle" | "compact" | "banner", Size> & Record<Exclude<Tab, "
   idle: IDLE.pill,
   compact: { w: 250, h: 37, r: 18.5 },
   banner: { w: 372, h: BANNER_H, r: 38 },
-  media: { w: 372, h: 198, r: 46 },
-  today: { w: 372, h: 204, r: 44 },
-  clock: { w: 372, h: 196, r: 44 },
-  notes: { w: 372, h: 236, r: 44 },
-  shelf: { w: 372, h: 200, r: 44 },
-  clipboard: { w: 372, h: 256, r: 44 },
-  stats: { w: 372, h: 236, r: 44 },
-  controls: { w: 372, h: 206, r: 44 },
+  media: { w: 372, h: 192, r: 46 },
+  today: { w: 372, h: 198, r: 44 },
+  weather: { w: 372, h: 330, r: 44 },
+  clock: { w: 372, h: 190, r: 44 },
+  notes: { w: 372, h: 230, r: 44 },
+  shelf: { w: 372, h: 194, r: 44 },
+  clipboard: { w: 372, h: 250, r: 44 },
+  stats: { w: 372, h: 230, r: 44 },
+  controls: { w: 372, h: 228, r: 44 },
+  downloads: { w: 372, h: 200, r: 44 }, // height follows the number of downloads
 };
 
 /** Squircle outline, horizontally centred in the frame. A true capsule when r = h/2. */
@@ -73,6 +128,38 @@ function islandPath(w: number, h: number, r: number) {
   const dx = (FRAME_W - w) / 2;
   // figma-squircle only uses absolute coords in M/L commands; shift those.
   return d.replace(/([ML]) (-?[\d.]+) (-?[\d.]+)/g, (_, c, x, y) => `${c} ${(+x + dx).toFixed(3)} ${y}`);
+}
+
+/**
+ * Lets the wheel scroll whatever scrollable list it's over. Vertical wheels also
+ * scroll horizontal strips (the shelf), like a trackpad would. Returns true if
+ * the event was used for scrolling (or the pointer is in a list that can scroll
+ * that way).
+ */
+function scrollInside(e: React.WheelEvent): boolean {
+  // Over a page's tab zone (Weather's hero) the wheel is for tabs.
+  if ((e.nativeEvent as WheelEvent & { islandTabZone?: boolean }).islandTabZone) return false;
+  // The smooth scroller already took this wheel for a list.
+  if (e.nativeEvent.defaultPrevented) return true;
+  const dy = e.deltaY;
+  const dx = e.deltaX;
+  let el = e.target as HTMLElement | null;
+  while (el && el !== e.currentTarget) {
+    const cs = getComputedStyle(el);
+    const canY = /(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1;
+    const canX = /(auto|scroll)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1;
+    if (canY && Math.abs(dy) >= Math.abs(dx)) {
+      const room = dy > 0 ? el.scrollHeight - el.clientHeight - el.scrollTop : el.scrollTop;
+      if (room > 1) return true; // the browser scrolls it
+    }
+    if (canX) {
+      const d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+      const room = d > 0 ? el.scrollWidth - el.clientWidth - el.scrollLeft : el.scrollLeft;
+      if (room > 1) return true; // smoothScroll glides it
+    }
+    el = el.parentElement;
+  }
+  return false;
 }
 
 /* ---------------- Component ---------------- */
@@ -85,24 +172,61 @@ interface Props {
 }
 
 export function Island({ session, sessions, onCommand, onSelect }: Props) {
-  const { springs, settings } = useSettings();
+  const { springs, settings, update } = useSettings();
   const { pinned, expandOnHover, sizeScale } = settings;
-  const TABS: Tab[] = settings.modules?.length ? settings.modules : ["ai", "media"];
+  // Your order (rearranged by dragging icons in the tab dock).
+  const SAVED: Tab[] = settings.modules?.length ? settings.modules.filter((id) => ALL_MODULES.some((m) => m.id === id)) : ["ai", "media"];
+  // While something downloads (or just finished), a Downloads page comes first.
+  const { active: downloads, items: dlItems } = useDownloads();
+  const TABS: Tab[] = dlItems.length ? ["downloads", ...SAVED] : SAVED;
   useEffect(startClockTicker, []);
   const clockState = useClock();
   const timerLive = clockActive(clockState);
   const banners = useBanners();
-  const { active: downloads } = useDownloads();
+  const banner = banners[0] ?? null;
   const shelfCount = useShelf().length;
+  // Someone nearby wants to send files: the island opens to ask (oldest request first).
+  const incomingReq = useNearby().incoming[0] ?? null;
   const clipCount = useClips().length;
   const downloading = downloads.length > 0;
   const hud = useHud();
+  const activity = useActivity();
   const fill = islandColor(settings);
   const solid = settings.transparency === 0;
 
   /* ---- hover / click to expand ---- */
   const [hover, setHover] = useState(false);
   const [clickOpen, setClickOpen] = useState(false);
+  // Press and hold the island to lift it, then slide it along the top: it snaps to the
+  // top-left corner, the centre or the top-right corner (also in the right-click menu).
+  const [lifted, setLifted] = useState(false);
+  const pinRef = useRef<() => void>(() => {});
+  const dragOnRef = useRef(false);
+  // While moving: the edge under the cursor (the island previews its shape for it).
+  const [preview, setPreview] = useState<{ dock: Dock; along: DockAlong } | null>(null);
+  useEffect(() => {
+    const a = on("move://begin", () => {
+      if (!dragOnRef.current) pinRef.current(); // started from the menu / Settings
+      setLifted(true);
+    });
+    const b = on<{ dock: Dock; along: DockAlong }>("move://zone", setPreview);
+    const c = on("move://end", () => {
+      setPreview(null);
+      swallowClick.current = true;
+      setTimeout(() => {
+        setLifted(false);
+        swallowClick.current = false;
+      }, 160);
+    });
+    return () => {
+      a();
+      b();
+      c();
+    };
+  }, []);
+  const dock: Dock = preview?.dock ?? settings.dock ?? "top";
+  const along: DockAlong = preview?.along ?? settings.dockAlong ?? "center";
+  const side = dock === "left" || dock === "right";
   const hoverTimer = useRef<number>(0);
   const setHoverDelayed = useCallback((v: boolean) => {
     clearTimeout(hoverTimer.current);
@@ -114,6 +238,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   useEffect(() => bridge.onHover(setHoverDelayed), [setHoverDelayed]);
 
   const [mediaExtra, setMediaExtra] = useState(0);
+  const [controlsExtra, setControlsExtra] = useState(0);
 
   /* ---- swipe up (drag the island upwards) to dismiss, like iOS ---- */
   const swipe = useRef<{ y: number; t: number } | null>(null);
@@ -151,23 +276,109 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     return () => window.removeEventListener("blur", onBlur);
   }, [aiSticky, closeAi]);
 
-  const expanded = pinned || (expandOnHover ? hover : clickOpen && hover);
+  /* Pointing at a notification banner is to click it, not to open the island: while the cursor
+   * arrived on a banner, the island keeps showing the banner (and doesn't open on whatever tab was
+   * last used, e.g. Search or Ask) until the cursor leaves. */
+  // Decided in render (not an effect) so the island never flashes open for a frame first.
+  const bannerHover = useRef({ hover: false, on: false });
+  if (bannerHover.current.hover !== hover) bannerHover.current = { hover, on: hover && !!banner };
+  const onBanner = bannerHover.current.on;
+  const expanded = !lifted && !onBanner && (pinned || (expandOnHover ? hover : clickOpen && hover));
+
+  /* ---- warm-up ----
+   * WebView2 starts cold: the first time a panel mounts it parses/JITs its code, decodes images,
+   * rasterises fonts and compiles the GPU shaders for blur/backdrop filters. Doing all that on the
+   * first hover made the first open stutter. Right after launch we mount every panel once in an
+   * invisible layer (one per frame or two), run the same blur/scale entrance on it, then drop it,
+   * so the real first hover is as smooth as the hundredth. A real hover cancels it immediately. */
+  const [warmTab, setWarmTab] = useState<WarmTab | "dock" | null>(null);
+  const warmDone = useRef(false);
+  const warmDockTop = useMotionValue(0);
+  useEffect(() => {
+    if (expanded && !warmDone.current) {
+      warmDone.current = true;
+      setWarmTab(null);
+    }
+  }, [expanded]);
+  useEffect(() => {
+    let dead = false;
+    const frames = (n: number) =>
+      new Promise<void>((res) => {
+        const t = window.setTimeout(res, 60 * n); // rAF can be throttled while the window is untouched
+        const step = (k: number) => (k <= 0 ? (clearTimeout(t), res()) : requestAnimationFrame(() => step(k - 1)));
+        step(n);
+      });
+    (async () => {
+      await Promise.race([document.fonts?.ready, frames(30)]);
+      await frames(20); // let launch work settle first
+      // JIT the squircle maths the expand animation runs every frame.
+      for (let i = 0; i < 160; i++) islandPath(120 + i * 1.6, 37 + i, 18 + i * 0.16);
+      // (AI is skipped: its panel grabs keyboard focus when it mounts.)
+      const order: (WarmTab | "dock")[] = ["media", ...TABS.filter((t): t is WarmTab => t !== "media" && t !== "ai"), "dock"];
+      for (const t of order) {
+        if (dead || warmDone.current) return;
+        setWarmTab(t);
+        await frames(3);
+      }
+      warmDone.current = true;
+      if (!dead) setWarmTab(null);
+    })();
+    return () => {
+      dead = true;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- tabs (scroll to switch) ---- */
   const [tab, setTab] = useState<Tab>("media");
+  // Volume changes made while the island is open (the Controls slider, or keys
+  // while you're looking at it) don't pop a HUD afterwards.
+  const quietHere = expanded && tab === "controls";
+  useEffect(() => {
+    quietHud(quietHere ? Infinity : 0);
+  }, [quietHere]);
+  useEffect(() => {
+    if (!expanded) quietHud(450); // and drop anything queued while it was open
+  }, [expanded]);
   const [dir, setDir] = useState(1);
   const lastWheel = useRef(0);
-  const onWheel = (e: React.WheelEvent) => {
-    if (!expanded || aiSticky) return;
+  const listWheel = useRef(0);
+  /** One tab left/right per flick (fast wheel spins don't skip several). */
+  const flickTab = (dx: number, dy: number) => {
     const t = performance.now();
-    if (t - lastWheel.current < 380 || Math.abs(e.deltaY) + Math.abs(e.deltaX) < 4) return;
+    if (aiSticky && t - lastWheel.current >= 380 && Math.abs(dy) + Math.abs(dx) >= 4) {
+      // Scrolling away from Search or Ask: let go of the keyboard and switch tabs.
+      setAiSticky(false);
+      bridge.aiFocus(false);
+      bridge.glassStop();
+      setHover(true);
+    }
+    if (t - lastWheel.current < 380 || Math.abs(dy) + Math.abs(dx) < 4) return;
     lastWheel.current = t;
-    const d = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) > 0 ? 1 : -1;
+    const d = (Math.abs(dx) > Math.abs(dy) ? dx : dy) > 0 ? 1 : -1;
     const next = TABS[TABS.indexOf(tab) + d];
     if (next) {
       setDir(d);
       setTab(next);
     }
+  };
+  const onWheel = (e: React.WheelEvent) => {
+    if (!expanded && !aiSticky) return;
+    // Shift+wheel always changes tabs, even over a list (Weather, Clipboard…).
+    if (e.shiftKey) {
+      flickTab(e.deltaX, e.deltaY);
+      return;
+    }
+    // Lists (clipboard, shelf, Wi-Fi…) scroll first; only at their ends — and only
+    // with a fresh flick, not the tail of a scroll — does the wheel change tabs.
+    if (scrollInside(e)) {
+      listWheel.current = performance.now();
+      return;
+    }
+    if (performance.now() - listWheel.current < 450) {
+      listWheel.current = performance.now();
+      return;
+    }
+    flickTab(e.deltaX, e.deltaY);
   };
   // Opening the island: Media if something is playing, otherwise straight to AI.
   const wasExpanded = useRef(false);
@@ -176,8 +387,15 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   tabRef.current = tab;
   useEffect(() => {
     if (expanded && !wasExpanded.current && !aiSticky && Date.now() - tabLock.current > 600) {
-      const pick: Tab =
-        session?.playing && TABS.includes("media") ? "media" : timerLive && TABS.includes("clock") ? "clock" : TABS.includes("ai") ? "ai" : TABS[0];
+      const pick: Tab = TABS.includes("downloads")
+        ? "downloads"
+        : session?.playing && TABS.includes("media")
+          ? "media"
+          : timerLive && TABS.includes("clock")
+            ? "clock"
+            : TABS.includes("ai")
+              ? "ai"
+              : TABS[0];
       setTab(pick);
     }
     wasExpanded.current = expanded;
@@ -203,29 +421,80 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   });
 
   // Files dragged onto the island open the shelf.
+  // Files dragged onto the island always open the Shelf (unless the Controls tab's
+  // Pinned page is open — then the drop pins them to the launcher instead).
   const dragging = useShelfDrop(() => {
-    if (TABS.includes("shelf") && tabRef.current !== "controls") {
+    bridge.log(`drag enter: tab=${tabRef.current} pinsOpen=${pinsPageOpen()} expanded=${expanded}`);
+    if (TABS.includes("shelf") && !(tabRef.current === "controls" && pinsPageOpen())) {
       tabLock.current = Date.now();
+      setDir(TABS.indexOf("shelf") > TABS.indexOf(tabRef.current) ? 1 : -1);
       setTab("shelf");
     }
     setHover(true);
   });
 
   // What the collapsed island shows: media first (like iOS), otherwise a running timer.
-  const primary: "media" | "clock" | "download" | null = session?.playing ? "media" : timerLive ? "clock" : downloading ? "download" : null;
-  const banner = banners[0] ?? null;
+  // Picking a paused source in the open island is just for a look: once it closes,
+  // the island goes back to whatever is actually playing (like iOS).
+  const playingElsewhere = !session?.playing ? sessions.find((x) => x.playing) : undefined;
+  useEffect(() => {
+    if (!expanded && playingElsewhere) onSelect(playingElsewhere.id);
+  }, [expanded, playingElsewhere?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A screen recording (or its countdown) outranks everything else in the collapsed island.
+  const rec = useScreenRec();
+  const recOn = recActive(rec);
+  // While recording, hovering shows Pause / Stop; picking a tab in the dock shows that tab
+  // instead until the island closes again.
+  const [recBrowse, setRecBrowse] = useState(false);
+  useEffect(() => {
+    if (!expanded) setRecBrowse(false);
+  }, [expanded]);
+  const primary: "rec" | "media" | "clock" | "download" | null = recOn ? "rec" : session?.playing ? "media" : timerLive ? "clock" : downloading ? "download" : null;
   const mode: Mode =
-    aiSticky || (expanded && tab === "ai")
+    aiSticky
       ? "ai"
+      : incomingReq && !dragging
+        ? "incoming"
+      : recOn && expanded && !dragging && !recBrowse
+        ? "rec"
+      : expanded && tab === "ai"
+        ? "ai"
       : expanded || dragging
         ? "expanded"
         : banner
           ? "banner"
           : hud
             ? "hud"
-            : primary
-              ? "compact"
-              : "idle";
+            : activity
+              ? "activity"
+              : primary
+                ? "compact"
+                : "idle";
+
+  // While Gemini thinks, the island shrinks to just the glowing dot spinner, then
+  // springs open again when the answer starts arriving.
+  const { status: aiStatus, voice: aiVoice } = useAiSession();
+  // Turning speech into text looks exactly like thinking: the island shrinks to its circle.
+  const aiThinking = mode === "ai" && (aiStatus === "thinking" || aiVoice === "transcribing");
+
+  // A new version finished downloading in the background: offer it once.
+  useEffect(
+    () =>
+      on<{ version: string }>("update://ready", ({ version }) =>
+        pushBanner({
+          id: `update-${version}`,
+          app: "Software Update",
+          title: `Islander ${version} is ready`,
+          body: "Click to restart and update",
+          icon: null,
+          glyph: "update",
+          tint: "#1c1c1e",
+          action: "update",
+          ttl: 15000,
+        }),
+      ),
+    [],
+  );
 
   /* ---- second activity → split bubble ---- */
   const otherMedia = sessions.find((s) => s.playing && s.id !== session?.id) ?? null;
@@ -239,39 +508,72 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
           ? "media"
           : null;
   const other = bubbleKind === "media" ? otherMedia : null;
-  const split = mode === "compact" && !!bubbleKind;
+  const split = mode === "compact" && !!bubbleKind && !side && !lifted;
+  const dockOn = (expanded || aiSticky) && TABS.length > 1;
   const lastOther = useRef(other);
   if (other) lastOther.current = other;
 
   /* ---- shape springs ---- */
-  const idleStyle = IDLE[settings.idleStyle] ? settings.idleStyle : "notch";
+  // The waterdrop notch only exists on the top edge; elsewhere the idle island is a pill.
+  const idleStyle = IDLE[settings.idleStyle] ? (settings.idleStyle === "notch" && dock !== "top" ? "pill" : settings.idleStyle) : "notch";
   // Auto-hide: when idle, the island tucks fully into the top edge until the cursor touches it.
-  const tucked = !!settings.autoHide && mode === "idle" && !hover;
+  const tucked = !!settings.autoHide && dock === "top" && mode === "idle" && !hover && !lifted;
+  // On the left/right edge the collapsed forms stand upright.
+  const vertical = side && (mode === "idle" || mode === "compact" || (mode === "hud" && (hud?.kind === "volume" || hud?.kind === "brightness")));
   const target: Size =
     mode === "ai"
-      ? { w: AI_W, h: aiH, r: aiView === "search" ? aiH / 2 : 40 }
+      ? aiThinking
+        ? THINKING_SIZE
+        : { w: AI_W, h: aiH, r: aiView === "search" ? aiH / 2 : 40 }
       : mode === "expanded"
         ? tab === "media"
           ? { ...SIZES.media, h: SIZES.media.h + mediaExtra }
+          : tab === "controls"
+            ? { ...SIZES.controls, h: SIZES.controls.h + controlsExtra }
           : tab === "shelf"
             ? // Compact while empty; full height once there's something on it (or a drag is over it).
-              { ...SIZES.shelf, h: shelfCount || dragging ? SIZES.shelf.h : 132 }
+              // Nearby sharing adds the row of devices underneath.
+              { ...SIZES.shelf, h: (shelfCount || dragging ? SIZES.shelf.h : 126) + (settings.nearbySharing !== false ? NEARBY_H : 0) }
             : tab === "clipboard"
               ? // Grows with the list: header + 44 px per row, up to four rows (then it scrolls).
-                { ...SIZES.clipboard, h: Math.min(SIZES.clipboard.h, Math.max(132, 74 + 44 * (settings.clipboardHistory ? clipCount : 0))) }
-              : SIZES[tab as Exclude<Tab, "ai">] ?? SIZES.today
+                { ...SIZES.clipboard, h: Math.min(SIZES.clipboard.h, Math.max(126, 68 + 44 * (settings.clipboardHistory ? clipCount : 0))) }
+              : tab === "downloads"
+                ? { ...SIZES.downloads, h: downloadsPanelHeight(dlItems.length) }
+                : SIZES[tab as Exclude<Tab, "ai">] ?? SIZES.today
+        : mode === "incoming"
+          ? INCOMING_SIZE
+        : mode === "rec"
+          ? REC_PANEL
         : mode === "banner"
           ? SIZES.banner
+          : mode === "activity"
+            ? activity?.kind === "device"
+              ? DEVICE_SIZE
+              : POWER_SIZE
           : mode === "hud"
-            ? hud?.kind === "mute"
-              ? MUTE_SIZE
-              : HUD_SIZE
+            ? vertical
+              ? SIDE.hud
+              : hud?.kind === "mute"
+                ? MUTE_SIZE
+                : HUD_SIZE
             : mode === "idle"
               ? tucked
                 ? { w: IDLE[idleStyle].w, h: 0, r: 0 }
-                : IDLE[idleStyle]
-              : SIZES.compact;
-  const attached = mode === "idle" && idleStyle === "notch" && !tucked;
+                : vertical && idleStyle === "pill"
+                  ? SIDE.pill
+                  : IDLE[idleStyle]
+              : vertical
+                ? SIDE.compact
+                : primary === "rec"
+                  ? COMPACT_REC
+                  : primary === "media"
+                  ? COMPACT_MEDIA
+                  : primary === "clock"
+                    ? COMPACT_CLOCK
+                    : SIZES.compact;
+  const attached = mode === "idle" && idleStyle === "notch" && !tucked && dock === "top";
+  const movingRef = useRef(false);
+  movingRef.current = lifted;
   const w = useMotionValue(target.w);
   const h = useMotionValue(target.h);
   const r = useMotionValue(target.r);
@@ -279,7 +581,9 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
   useEffect(() => {
     const area = target.w * target.h;
-    const sp = area >= prevArea.current ? springs.expand : springs.collapse;
+    // While it's held/moved, shape changes glide without any bounce (a bouncing shape
+    // under your cursor reads as a glitch); otherwise the usual springs.
+    const sp = movingRef.current ? CALM : area >= prevArea.current ? springs.expand : springs.collapse;
     prevArea.current = area;
     // animate() on a moving value keeps its velocity → smooth retargeting.
     animate(w, target.w, sp);
@@ -289,11 +593,18 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
   const clip = useTransform(() => `path('${islandPath(w.get(), h.get(), r.get())}')`);
   const rimPath = useTransform(() => islandPath(w.get(), h.get(), r.get()));
+  // A little longer than the island so the shadow falls more below it.
 
   /* ---- the hairline rim: grey by default, tinted by what the island is doing ---- */
   const rimColor =
-    mode === "hud" && hud?.kind === "mute" && hud.on
+    (mode === "compact" || mode === "rec") && primary === "rec"
+      ? "rgba(255, 59, 48, 0.95)"
+      : (mode === "hud" && hud?.kind === "mute" && hud.on) || (mode === "activity" && activity?.kind === "low")
       ? "rgba(255, 69, 58, 0.62)"
+      : mode === "activity" && activity?.kind === "charging"
+        ? "rgba(48, 209, 88, 0.6)"
+        : mode === "activity" && activity?.kind === "unplugged"
+          ? "rgba(255, 255, 255, 0.34)"
       : mode === "compact" && primary === "clock"
         ? clockState.kind === "stopwatch"
           ? "rgba(255, 214, 10, 0.55)"
@@ -316,7 +627,70 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   useEffect(() => {
     if (attached) setAttVisible(true);
   }, [attached]);
-  const dotsY = useTransform(h, (v) => v - 13);
+  const dockTop = useTransform(h, (v) => (dock === "bottom" ? TOP - DOCK_GAP - DOCK_H : TOP + v + DOCK_GAP));
+  const dockSpace = dockOn ? DOCK_GAP + DOCK_H : 0;
+  const below = dock === "bottom" ? 0 : dockSpace;
+  const above = dock === "bottom" ? dockSpace : 0;
+
+  /* ---- where the island sits in its window (follows the shape as it morphs) ---- */
+  // While it's being moved the island floats in the middle of its window (the window
+  // follows the mouse); `float` blends between docked (0) and floating (1). On landing,
+  // `landX/Y` start at where it was on screen and spring to 0, so it glides into place.
+  // While held, the island keeps its centre exactly where it was picked up (dragOn = 1,
+  // centre = dragX/Y) and only the window follows the mouse: one motion, no tug of war.
+  const dragOn = useMotionValue(0);
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
+  const landX = useMotionValue(0);
+  const landY = useMotionValue(0);
+  const shiftX = useTransform(() => {
+    if (dragOn.get()) return dragX.get() - (FRAME_X + FRAME_W / 2);
+    return islandOrigin(dock, along, w.get(), h.get(), below, above).x - (FRAME_X + (FRAME_W - w.get()) / 2) + landX.get();
+  });
+  const shiftY = useTransform(() => {
+    if (dragOn.get()) return dragY.get() - h.get() / 2 - TOP;
+    return islandOrigin(dock, along, w.get(), h.get(), below, above).y - TOP + landY.get();
+  });
+  const origin = islandOrigin(dock, along, target.w, target.h, below, above);
+  const dockRef = useRef({ dock, along, below, above });
+  dockRef.current = { dock, along, below, above };
+  /** Pin the island's current centre for the move and tell the backend (it keeps that
+   *  point under the cursor). Called the moment it's picked up. */
+  const pinForMove = () => {
+    const o = islandOrigin(dock, along, w.get(), h.get(), below, above);
+    const cx = o.x + w.get() / 2;
+    const cy = o.y + h.get() / 2;
+    dragX.set(cx);
+    dragY.set(cy);
+    dragOn.set(1);
+    dragOnRef.current = true;
+    landX.set(0);
+    landY.set(0);
+    send("island_move_anchor", { x: cx * sizeScale, y: cy * sizeScale });
+  };
+  pinRef.current = pinForMove;
+  useEffect(() => {
+    if (!lifted) {
+      dragOn.set(0);
+      dragOnRef.current = false;
+    }
+  }, [lifted, dragOn]);
+  useEffect(
+    () =>
+      on<{ x: number; y: number }>("move://landing", ({ x, y }) => {
+        // The window has just jumped to its spot: start the island where it was on
+        // screen (x, y = its centre in the new window), then spring it home.
+        const d = dockRef.current;
+        const o = islandOrigin(d.dock, d.along, w.get(), h.get(), d.below, d.above);
+        dragOn.set(0);
+        landX.set(x - (o.x + w.get() / 2));
+        landY.set(y - (o.y + h.get() / 2));
+        const sp = { type: "spring" as const, stiffness: 260, damping: 26, mass: 0.9 };
+        animate(landX, 0, sp);
+        animate(landY, 0, sp);
+      }),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   /* ---- bubble progress (0 = merged into island, 1 = fully separated) ---- */
   const bp = useMotionValue(split ? 1 : 0);
@@ -337,22 +711,44 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
   /* ---- tell the backend where we are (for click-through + hover) ---- */
   useEffect(() => {
-    const vw = window.innerWidth;
     const s = sizeScale;
+    const cx = origin.x + target.w / 2;
     const island = tucked
-      ? { x: vw / 2 - 110 * s, y: 0, w: 220 * s, h: 3 } // a thin strip at the very top edge
+      ? { x: (cx - 110) * s, y: 0, w: 220 * s, h: 3 } // a thin strip at the very top edge
       : attached
-      ? { x: vw / 2 - (DROP_W * s) / 2, y: 0, w: DROP_W * s, h: DROP_D * s }
-      : { x: vw / 2 - (target.w * s) / 2, y: TOP * s, w: target.w * s, h: target.h * s };
-    const bubble = split ? { x: vw / 2 + (target.w / 2 + GAP) * s, y: TOP * s, w: BUBBLE * s, h: BUBBLE * s } : null;
+      ? { x: (cx - DROP_W / 2) * s, y: 0, w: DROP_W * s, h: DROP_D * s }
+      : { x: origin.x * s, y: (origin.y - above) * s, w: target.w * s, h: (target.h + below + above) * s };
+    const bubble = split ? { x: (origin.x + target.w + GAP) * s, y: origin.y * s, w: BUBBLE * s, h: BUBBLE * s } : null;
     bridge.setHitRects(island, bubble);
-  }, [target.w, target.h, split, sizeScale, attached, tucked]);
+  }, [target.w, target.h, split, sizeScale, attached, tucked, origin.x, origin.y, below, above]);
+
+  // One-time tip so people find out the island can move.
+  useEffect(() => {
+    if (settings.moveTipShown) return;
+    const t = setTimeout(() => {
+      pushBanner({
+        id: "tip-move",
+        app: "Tip",
+        title: "Put the island anywhere",
+        body: "Press and hold it, then drag it to any edge of the screen",
+        icon: null,
+        glyph: "update",
+        tint: "#1c1c1e",
+        ttl: 9000,
+      });
+      update({ moveTipShown: true });
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [settings.moveTipShown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const glassOn = mode === "ai" && settings.aiGlass;
   useEffect(() => {
     if (!glassOn) return;
     const s = sizeScale;
-    const rect = () => ({ x: window.innerWidth / 2 - (AI_W * s) / 2, y: TOP * s, w: AI_W * s, h: Math.max(h.get(), AI_BAR_H) * s });
+    const rect = () => {
+      const o = islandOrigin(dock, along, AI_W, Math.max(h.get(), AI_BAR_H), 0, 0);
+      return { x: o.x * s, y: o.y * s, w: AI_W * s, h: Math.max(h.get(), AI_BAR_H) * s };
+    };
     bridge.glassStart(rect());
     // Follow the panel as it grows (throttled to the capture rate).
     let last = 0;
@@ -369,7 +765,40 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       clearInterval(settle);
       bridge.glassStop();
     };
-  }, [glassOn, sizeScale, h]);
+  }, [glassOn, sizeScale, h, dock, along]);
+
+  // Press and hold the island to pick it up; the backend then moves it with the mouse
+  // and docks it where you let go (see start_move in main.rs).
+  const holdTimer = useRef(0);
+  const holdAt = useRef<{ x: number; y: number } | null>(null);
+  const swallowClick = useRef(false);
+  const NO_LIFT = "[data-no-lift], button, input, textarea, select, a, [role=slider], [draggable=true], .dock-wrap, [contenteditable]";
+  const liftDown = (e: React.PointerEvent<HTMLElement>) => {
+    // Works on every page, Search or Ask included (just not while you're typing in it).
+    if (e.button !== 0 || aiSticky || lifted) return;
+    if ((e.target as HTMLElement).closest(NO_LIFT)) return;
+    holdAt.current = { x: e.screenX, y: e.screenY };
+    clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(() => {
+      holdAt.current = null;
+      swallowClick.current = true;
+      pinForMove();
+      setLifted(true);
+      send("island_move_start", { click: false });
+    }, 420);
+  };
+  const liftMove = (e: React.PointerEvent<HTMLElement>) => {
+    // Moving before the hold completes is a normal drag/swipe, not a pick-up.
+    const at = holdAt.current;
+    if (at && Math.hypot(e.screenX - at.x, e.screenY - at.y) > 8) {
+      clearTimeout(holdTimer.current);
+      holdAt.current = null;
+    }
+  };
+  const liftUp = () => {
+    clearTimeout(holdTimer.current);
+    holdAt.current = null;
+  };
 
   const domHover = bridge.isNative
     ? {}
@@ -377,11 +806,19 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
   const contentKey =
     mode === "ai"
-      ? "ai"
+      ? aiThinking
+        ? "ai-thinking"
+        : "ai"
       : mode === "expanded"
         ? `x-${tab}`
+        : mode === "incoming"
+          ? `in-${incomingReq?.id}`
+        : mode === "rec"
+          ? "rec-panel"
         : mode === "banner"
           ? `b-${banner?.id}`
+          : mode === "activity"
+            ? `act-${activity?.id}`
           : mode === "hud"
             ? `hud-${hud?.kind}${hud?.kind === "mute" ? `-${hud.seq}` : ""}`
             : mode === "compact"
@@ -412,25 +849,60 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         if (mode === "ai" && e.target === e.currentTarget) closeAi();
       }}
     >
+      {/* Everything moves together to the edge the island is docked on. */}
+      <motion.div className="stage-shift" style={{ x: shiftX, y: shiftY }}>
       {/* Gooey bridge layer: blurred + alpha-thresholded copy that only shows where shapes meet. */}
       {bubbleVisible && mode !== "expanded" && solid && <GooLayer w={w} h={h} cx={bubbleCx} scale={bubbleScale} fill={fill} />}
 
       {attVisible && <Waterdrop att={att} fill={fill} />}
 
-      {settings.privacyDots && <PrivacyDots islandW={w} split={split} />}
+
+      {/* Backdrop: a soft, blurred shadow behind the open island (like iOS dimming the
+          background when the island expands). Follows the shape as it morphs. */}
+      <motion.svg
+        className="island-backdrop"
+        width={WIN_W}
+        height={FRAME_H + SHADOW_PAD}
+        style={{ top: TOP, marginLeft: -WIN_W / 2 }}
+        initial={false}
+        animate={{ opacity: mode === "expanded" || mode === "ai" || mode === "incoming" || mode === "rec" || lifted ? 1 : 0 }}
+        transition={{ duration: mode === "expanded" || mode === "ai" || mode === "incoming" || mode === "rec" ? 0.35 : 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+      >
+        {/* The blur is an SVG filter over the whole frame (not a CSS-blurred layer), so
+            the renderer can never clip it into a hard-edged box while the island resizes. */}
+        <defs>
+          {/* The whole window wide, so a wide panel (AI is 440 of the 460 px frame) has room
+              for the blur to fade out instead of being cut into a hard-edged box. */}
+          <filter id="island-shadow" filterUnits="userSpaceOnUse" x={0} y={0} width={WIN_W} height={FRAME_H + SHADOW_PAD}>
+            <feGaussianBlur stdDeviation={13} />
+          </filter>
+        </defs>
+        <motion.path d={rimPath} fill="rgba(0,0,0,0.38)" filter="url(#island-shadow)" style={{ x: (WIN_W - FRAME_W) / 2, y: 10 }} />
+      </motion.svg>
 
       <motion.div
         className="island"
         style={{ width: FRAME_W, height: FRAME_H, marginLeft: -FRAME_W / 2, top: TOP, clipPath: clip }}
         initial={false}
-        animate={{ backgroundColor: mode === "ai" ? "rgba(0,0,0,0)" : fill }}
-        transition={{ ...springs.press, backgroundColor: { duration: mode === "ai" ? 0.35 : 0.2 } }}
-        whileTap={mode !== "expanded" && mode !== "ai" ? { scale: 0.95 } : undefined}
+        animate={{ backgroundColor: mode === "ai" && !aiThinking ? "rgba(0,0,0,0)" : fill, scale: lifted ? 1.06 : 1 }}
+        transition={{ ...springs.press, scale: lifted ? CALM : springs.press, backgroundColor: { duration: mode === "ai" ? 0.35 : 0.2 } }}
+        whileTap={mode !== "expanded" && mode !== "ai" && !lifted ? { scale: 0.95 } : undefined}
         onWheel={onWheel}
         onPointerDown={(e) => {
           if (e.button === 0) swipe.current = { y: e.clientY, t: performance.now() };
+          liftDown(e);
+        }}
+        onPointerMove={liftMove}
+        onPointerCancel={liftUp}
+        onClickCapture={(e) => {
+          if (swallowClick.current) {
+            swallowClick.current = false;
+            e.stopPropagation();
+            e.preventDefault();
+          }
         }}
         onPointerUp={(e) => {
+          liftUp();
           const st = swipe.current;
           swipe.current = null;
           if (!st || pinned || aiSticky || mode !== "expanded") return;
@@ -452,7 +924,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         {...domHover}
       >
         <AnimatePresence>
-          {mode === "ai" && (
+          {mode === "ai" && !aiThinking && (
             <motion.div
               key="glass"
               className="glass-layer"
@@ -488,7 +960,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
         <AnimatePresence initial={false} custom={dir}>
           <motion.div
-            key={contentKey}
+            key={vertical ? `${contentKey}:v` : contentKey}
             className="content"
             custom={dir}
             variants={contentVariants}
@@ -496,11 +968,19 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
             animate="animate"
             exit="exit"
           >
-            {mode === "compact" && primary === "media" && session && <MediaCompact session={session} width={SIZES.compact.w} height={SIZES.compact.h} />}
-            {mode === "compact" && primary === "clock" && <ClockCompact width={SIZES.compact.w} height={SIZES.compact.h} />}
-            {mode === "compact" && primary === "download" && <DownloadCompact active={downloads} width={SIZES.compact.w} height={SIZES.compact.h} />}
+            {mode === "compact" && vertical && primary === "media" && session && <MediaCompactV session={session} />}
+            {mode === "compact" && vertical && primary === "clock" && <ClockCompactV />}
+            {mode === "compact" && vertical && primary === "download" && <DownloadCompactV active={downloads} />}
+            {mode === "compact" && !vertical && primary === "media" && session && <MediaCompact session={session} width={COMPACT_MEDIA.w} height={COMPACT_MEDIA.h} />}
+            {mode === "compact" && !vertical && primary === "clock" && <ClockCompact width={COMPACT_CLOCK.w} height={COMPACT_CLOCK.h} />}
+            {mode === "compact" && !vertical && primary === "download" && <DownloadCompact active={downloads} width={SIZES.compact.w} height={SIZES.compact.h} />}
             {mode === "banner" && banner && <Banner banner={banner} width={SIZES.banner.w} />}
-            {mode === "hud" && hud && <Hud hud={hud} />}
+            {mode === "incoming" && incomingReq && <IncomingCard req={incomingReq} />}
+            {mode === "rec" && <RecPanel />}
+            {mode === "compact" && primary === "rec" && (vertical ? <RecCompactV /> : <RecCompact width={COMPACT_REC.w} height={COMPACT_REC.h} />)}
+            {mode === "hud" && hud && (vertical ? <HudV hud={hud} /> : <Hud hud={hud} />)}
+            {mode === "activity" && activity?.kind === "device" && <DeviceActivity device={activity.device} />}
+            {mode === "activity" && activity && activity.kind !== "device" && <PowerActivity kind={activity.kind} percent={activity.percent} />}
             {mode === "expanded" && tab === "media" && (
               <MediaExpanded
                 session={session}
@@ -512,33 +992,79 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                 onExtraHeight={setMediaExtra}
               />
             )}
+            {mode === "expanded" && tab === "downloads" && <DownloadsPanel items={dlItems} width={SIZES.downloads.w} height={target.h} />}
             {mode === "expanded" && tab === "today" && <TodayPanel width={SIZES.today.w} height={SIZES.today.h} />}
+            {mode === "expanded" && tab === "weather" && <WeatherPanel width={SIZES.weather.w} height={SIZES.weather.h} />}
             {mode === "expanded" && tab === "clock" && <ClockPanel width={SIZES.clock.w} height={SIZES.clock.h} />}
             {mode === "expanded" && tab === "notes" && <NotesPanel width={SIZES.notes.w} height={SIZES.notes.h} />}
             {mode === "expanded" && tab === "shelf" && <ShelfPanel width={SIZES.shelf.w} height={target.h} dragging={dragging} />}
             {mode === "expanded" && tab === "clipboard" && <ClipboardPanel width={SIZES.clipboard.w} height={target.h} />}
             {mode === "expanded" && tab === "stats" && <StatsPanel width={SIZES.stats.w} height={SIZES.stats.h} />}
-            {mode === "expanded" && tab === "controls" && <ControlsPanel width={SIZES.controls.w} height={SIZES.controls.h} />}
-            {mode === "ai" && <AiPanel width={AI_W} active={aiSticky} onActivate={activateAi} onShape={onAiShape} onClose={closeAi} />}
+            {mode === "expanded" && tab === "controls" && <ControlsPanel width={SIZES.controls.w} height={SIZES.controls.h} onExtraHeight={setControlsExtra} />}
+            {mode === "ai" && aiThinking && <AiThinking />}
+            {mode === "ai" && !aiThinking && <AiPanel width={AI_W} active={aiSticky} onActivate={activateAi} onShape={onAiShape} onClose={closeAi} />}
           </motion.div>
         </AnimatePresence>
 
-        <AnimatePresence>
-          {expanded && !aiSticky && (
+      </motion.div>
+
+      {warmTab && !expanded && !aiSticky && (
+        <div className="warm-layer" aria-hidden>
+          {warmTab === "dock" ? (
+            <TabDock tabs={TABS} active={tab} top={warmDockTop} fill={fill} onSelect={() => {}} onReorder={() => {}} />
+          ) : (
             <motion.div
-              className="dots"
-              style={{ y: dotsY }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { delay: 0.15 } }}
-              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              key={warmTab}
+              className="warm-panel"
+              style={{ width: SIZES[warmTab].w, height: SIZES[warmTab].h, background: fill, borderRadius: SIZES[warmTab].r }}
+              initial={{ opacity: 0, scale: 0.92, filter: "blur(10px)" }}
+              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+              transition={{ duration: 0.12 }}
             >
-              {TABS.map((t) => (
-                <motion.span key={t} animate={{ opacity: t === tab ? 0.9 : 0.25, width: t === tab ? 12 : 5 }} transition={springs.content} />
-              ))}
+              {warmTab === "media" && (
+                <MediaExpanded session={session} sessions={sessions} width={SIZES.media.w} height={SIZES.media.h} onCommand={() => {}} onSelect={() => {}} onExtraHeight={() => {}} />
+              )}
+              {warmTab === "downloads" && <DownloadsPanel items={dlItems} width={SIZES.downloads.w} height={SIZES.downloads.h} />}
+              {warmTab === "today" && <TodayPanel width={SIZES.today.w} height={SIZES.today.h} />}
+              {warmTab === "weather" && <WeatherPanel width={SIZES.weather.w} height={SIZES.weather.h} />}
+              {warmTab === "clock" && <ClockPanel width={SIZES.clock.w} height={SIZES.clock.h} />}
+              {warmTab === "notes" && <NotesPanel width={SIZES.notes.w} height={SIZES.notes.h} />}
+              {warmTab === "shelf" && <ShelfPanel width={SIZES.shelf.w} height={SIZES.shelf.h} dragging={false} scan={false} />}
+              {warmTab === "clipboard" && <ClipboardPanel width={SIZES.clipboard.w} height={SIZES.clipboard.h} />}
+              {warmTab === "stats" && <StatsPanel width={SIZES.stats.w} height={SIZES.stats.h} />}
+              {warmTab === "controls" && <ControlsPanel width={SIZES.controls.w} height={SIZES.controls.h} onExtraHeight={() => {}} />}
             </motion.div>
           )}
-        </AnimatePresence>
-      </motion.div>
+        </div>
+      )}
+
+      {/* Tab dock: one icon per tab under the open island (click, hover, drag to rearrange). */}
+      <AnimatePresence>
+        {(expanded || aiSticky) && !aiThinking && mode !== "incoming" && TABS.length > 1 && (
+          <TabDock
+            key="dock"
+            tabs={TABS}
+            active={tab}
+            top={dockTop}
+            fill={fill}
+            onSelect={(t) => {
+              if (recOn) setRecBrowse(true);
+              if (aiSticky) {
+                setAiSticky(false);
+                bridge.aiFocus(false);
+                bridge.glassStop();
+                setHover(true);
+              }
+              if (t === tab) return;
+              setDir(TABS.indexOf(t) > TABS.indexOf(tab) ? 1 : -1);
+              setTab(t);
+              tabLock.current = Date.now();
+            }}
+            onReorder={(order) => update({ modules: order.filter((t): t is ModuleId => t !== "downloads") })}
+            onWheel={(dx, dy) => flickTab(dx, dy)}
+          />
+        )}
+      </AnimatePresence>
 
       {bubbleVisible && (bubbleSession || bubbleKind === "clock" || bubbleKind === "download") && (
         <motion.div
@@ -578,6 +1104,10 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
           </motion.div>
         </motion.div>
       )}
+
+      {/* Camera/mic dot: in the middle of the idle island, beside it otherwise. */}
+      {settings.privacyDots && !side && <PrivacyDots islandW={w} islandH={h} split={split} centered={mode === "idle" && !tucked} attached={attached} />}
+      </motion.div>
     </div>
   );
 }

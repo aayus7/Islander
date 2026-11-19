@@ -103,7 +103,7 @@ function ClipRow({ c }: { c: ClipItem }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -24, transition: { duration: 0.16 } }}
       transition={{ type: "spring", stiffness: 420, damping: 34 }}
-      onPointerDown={(e) =>
+      data-no-lift="" onPointerDown={(e) =>
         startDragOut(e, c.kind === "image" && c.path ? { files: [c.path] } : c.kind === "files" ? { files: c.files } : { text: c.text })
       }
       onClick={() => {

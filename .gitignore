@@ -3,6 +3,12 @@ dist
 dist-preview
 src-tauri/target
 src-tauri/gen
+release
+.keys
+*.key
+.env
+.dev.vars
+relay/.wrangler
 _incoming*.tar
 _incoming*.done
 _repo.tar
@@ -10,3 +16,10 @@ _backup_*
 harness/
 harness.html
 *.log
+*.wav
+*.flag
+extension-store/
+*.pem
+*.crx
+*.p12
+*.pfx

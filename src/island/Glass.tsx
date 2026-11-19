@@ -100,24 +100,26 @@ void main(){
     sdRound(c + e.yx, uSize * 0.5, uRadius) - sdRound(c - e.yx, uSize * 0.5, uRadius)) + 1e-5);
 
   // Refraction: strongest at the rim, fading over a 24px band → a convex lens edge.
-  float band = 30.0;
+  // Kept gentle: a strong bend stretches the picture into streaks along the rim.
+  float band = 22.0;
   float t = clamp(1.0 + d / band, 0.0, 1.0);
-  float bend = t * t * t;
-  vec2 shift = -n * bend * 38.0;                      // pull the picture inward at the edge
+  float bend = t * t * (3.0 - 2.0 * t) * t;           // smooth onset, no hard crease
+  vec2 shift = -n * bend * 12.0;                      // pull the picture inward at the edge
   vec2 uv = px / uSize;
   vec2 inv = 1.0 / uSize;
 
   vec3 col;
   if (uHasTex > 0.5) {
-    float rad = 3.5 * inv.x + 0.0025;   // light frost: things behind stay recognisable
+    // Light frost, a little heavier at the rim so the bend never shows raw pixels.
+    float rad = (3.5 + 6.0 * bend) * inv.x + 0.0025;
     vec2 base = uv + shift * inv;
-    vec2 disp = n * bend * 2.2 * inv;                 // chromatic dispersion at the rim
+    vec2 disp = n * bend * 0.6 * inv;                 // barely-there dispersion: no rainbow fringes
     col.r = frosted(base + disp, rad).r;
     col.g = frosted(base, rad).g;
     col.b = frosted(base - disp, rad).b;
     // Apple-like richness: lift saturation, keep it slightly dim so text stays readable.
     float l = dot(col, vec3(0.299, 0.587, 0.114));
-    col = mix(vec3(l), col, 1.55) * 0.92;
+    col = mix(vec3(l), col, 1.25) * 0.92;
   } else {
     col = vec3(0.07);
   }
@@ -206,6 +208,10 @@ export function LiquidGlass({ width, height, radius, clearFrom, maxHeight, tintT
       const h = Math.max(1, height.get());
       const r = Math.min(radius.get(), h / 2);
       const dpr = window.devicePixelRatio || 1;
+      // No live picture yet: stay invisible (the island's own black shows) instead of
+      // flashing a dark placeholder for the first few frames.
+      const vis = latest ? "1" : "0";
+      if (cv.style.opacity !== vis) cv.style.opacity = vis;
       const key = `${w}x${h}x${r}x${cf}x${dpr}x${tt}x${tb}`;
       if (key === lastKey && seen === version) return; // nothing changed: skip the GPU work
       lastKey = key;

@@ -11,6 +11,27 @@ pub struct BatteryAlert {
     pub low: bool,
 }
 
+/// Latest known levels by device name (shared with the Bluetooth list).
+static LEVELS: std::sync::Mutex<Vec<(String, u8)>> = std::sync::Mutex::new(Vec::new());
+
+pub fn levels() -> Vec<(String, u8)> {
+    LEVELS.lock().map(|l| l.clone()).unwrap_or_default()
+}
+
+fn store(map: &std::collections::HashMap<String, u8>) {
+    if let Ok(mut l) = LEVELS.lock() {
+        *l = map.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    }
+}
+
+/// Re-reads device batteries right away (a headset that just connected).
+#[cfg(windows)]
+pub fn scan_now() {
+    store(&imp::scan());
+}
+#[cfg(not(windows))]
+pub fn scan_now() {}
+
 #[cfg(windows)]
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || imp::run(app));
@@ -31,7 +52,7 @@ mod imp {
     /// DEVPKEY_Bluetooth_Battery
     const BATTERY: &str = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
 
-    fn scan() -> HashMap<String, u8> {
+    pub fn scan() -> HashMap<String, u8> {
         let mut out = HashMap::new();
         let props: IIterable<HSTRING> = vec![HSTRING::from(BATTERY)].into();
         let Ok(list) = DeviceInformation::FindAllAsyncWithKindAqsFilterAndAdditionalProperties(&HSTRING::new(), &props, DeviceInformationKind::Device).and_then(|op| op.get())
@@ -62,12 +83,14 @@ mod imp {
         }
         // First pass only records what's there (no banner storm at startup).
         let mut known = scan();
+        store(&known);
         loop {
-            std::thread::sleep(Duration::from_secs(30));
+            std::thread::sleep(Duration::from_secs(20));
             let now = scan();
+            store(&now);
             for (name, &level) in &now {
                 let alert = match known.get(name) {
-                    None => Some(BatteryAlert { name: name.clone(), level, low: level <= 20 }),
+                    None if level <= 20 => Some(BatteryAlert { name: name.clone(), level, low: true }),
                     Some(&prev) if prev > 20 && level <= 20 => Some(BatteryAlert { name: name.clone(), level, low: true }),
                     _ => None,
                 };

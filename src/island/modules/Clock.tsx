@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useNow } from "../../lib/hooks";
 import { clockActions, display, fmtClock, totalMs, useClock, type ClockKind } from "../../lib/timer";
-import { NumericText, Segmented } from "./ui";
+import { ModeSwitch, NumericText, Segmented } from "./ui";
 
 const ORANGE = "#ff9f0a";
 const GREEN = "#30d158";
@@ -29,87 +29,86 @@ export function ClockPanel({ width, height }: { width: number; height: number })
         ]}
       />
 
-      <div className="clock-main">
-        <div className="col" style={{ minWidth: 0 }}>
-          <span className="clock-caption">
-            {s.kind === "timer" ? (idle ? "Ready" : "Timer") : s.kind === "stopwatch" ? (s.laps.length ? `Lap ${s.laps.length + 1}` : "Stopwatch") : s.phase === "focus" ? "Focus" : "Break"}
-          </span>
-          <motion.span className="clock-digits" animate={{ color: idle && s.kind !== "stopwatch" ? "#fff" : color }} transition={{ duration: 0.3 }}>
-            <NumericText value={fmtClock(ms, { tenths: s.kind === "stopwatch" })} dir={s.kind === "stopwatch" ? 1 : s.running ? -1 : undefined} />
-          </motion.span>
-        </div>
-        <div className="row" style={{ gap: 12 }}>
-          {s.kind === "stopwatch" ? (
-            <RoundButton tone="grey" disabled={idle} onClick={() => (s.running ? clockActions.lap() : clockActions.reset())}>
-              {s.running || idle ? "Lap" : "Reset"}
-            </RoundButton>
-          ) : s.kind === "focus" ? (
-            <RoundButton tone="grey" disabled={idle && s.rounds === 0} onClick={() => (s.running ? clockActions.skip() : clockActions.reset())}>
-              {s.running ? "Skip" : "Reset"}
-            </RoundButton>
-          ) : (
-            <RoundButton tone="grey" disabled={idle} onClick={clockActions.reset}>
-              Cancel
-            </RoundButton>
-          )}
-          <RoundButton
-            tone={s.running ? (s.kind === "stopwatch" ? "red" : "orange") : "green"}
-            onClick={clockActions.toggle}
-          >
-            {s.running ? (s.kind === "stopwatch" ? "Stop" : "Pause") : idle ? "Start" : "Resume"}
-          </RoundButton>
-        </div>
-      </div>
-
-      <div className="clock-foot">
-        {s.kind === "timer" && (
-          <div className="chips" {...hScroll}>
-            {PRESETS.map((m) => (
-              <motion.button
-                key={m}
-                className={`chip ${s.timerMs === m * 60_000 ? "on" : ""}`}
-                whileTap={{ scale: 0.92 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  clockActions.setTimer(m * 60_000);
-                }}
-              >
-                {m} min
-              </motion.button>
-            ))}
+      <ModeSwitch k={s.kind} index={["timer", "stopwatch", "focus"].indexOf(s.kind)}>
+        <div className="clock-main">
+          <div className="col" style={{ minWidth: 0 }}>
+            <span className="clock-caption">
+              {s.kind === "timer" ? (idle ? "Ready" : "Timer") : s.kind === "stopwatch" ? (s.laps.length ? `Lap ${s.laps.length + 1}` : "Stopwatch") : s.phase === "focus" ? "Focus" : "Break"}
+            </span>
+            <motion.span className="clock-digits" animate={{ color: idle && s.kind !== "stopwatch" ? "#fff" : color }} transition={{ duration: 0.3 }}>
+              <NumericText value={fmtClock(ms, { tenths: s.kind === "stopwatch" })} dir={s.kind === "stopwatch" ? 1 : s.running ? -1 : undefined} />
+            </motion.span>
           </div>
-        )}
-        {s.kind === "stopwatch" && (
-          <div className="laps">
-            {s.laps.length === 0 ? (
-              <span className="dim">Laps appear here</span>
+          <div className="row" style={{ gap: 12 }}>
+            {s.kind === "stopwatch" ? (
+              <RoundButton tone="grey" disabled={idle} onClick={() => (s.running ? clockActions.lap() : clockActions.reset())}>
+                {s.running || idle ? "Lap" : "Reset"}
+              </RoundButton>
+            ) : s.kind === "focus" ? (
+              <RoundButton tone="grey" disabled={idle && s.rounds === 0} onClick={() => (s.running ? clockActions.skip() : clockActions.reset())}>
+                {s.running ? "Skip" : "Reset"}
+              </RoundButton>
             ) : (
-              s.laps.slice(0, 3).map((t, i) => (
-                <span key={s.laps.length - i} className="lap">
-                  <span className="dim">Lap {s.laps.length - i}</span>
-                  <span>{fmtClock(t - (s.laps[i + 1] ?? 0), { tenths: true })}</span>
-                </span>
-              ))
+              <RoundButton tone="grey" disabled={idle} onClick={clockActions.reset}>
+                Cancel
+              </RoundButton>
             )}
+            <RoundButton tone={s.running ? (s.kind === "stopwatch" ? "red" : "orange") : "green"} onClick={clockActions.toggle}>
+              {s.running ? (s.kind === "stopwatch" ? "Stop" : "Pause") : idle ? "Start" : "Resume"}
+            </RoundButton>
           </div>
-        )}
-        {s.kind === "focus" && (
-          <div className="row" style={{ gap: 10, width: "100%" }}>
-            <div className="row" style={{ gap: 6 }}>
-              {[0, 1, 2, 3].map((i) => (
-                <motion.span
-                  key={i}
-                  className="round-dot"
-                  animate={{ backgroundColor: i < s.rounds % 4 || (s.rounds > 0 && s.rounds % 4 === 0 && s.phase === "break") ? ORANGE : "rgba(118,118,128,0.4)" }}
-                />
+        </div>
+
+        <div className="clock-foot">
+          {s.kind === "timer" && (
+            <div className="chips" {...hScroll}>
+              {PRESETS.map((m) => (
+                <motion.button
+                  key={m}
+                  className={`chip ${s.timerMs === m * 60_000 ? "on" : ""}`}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clockActions.setTimer(m * 60_000);
+                  }}
+                >
+                  {m} min
+                </motion.button>
               ))}
             </div>
-            <span className="dim" style={{ fontSize: 13, fontWeight: 500 }}>
-              {s.focusMin} min focus · {s.breakMin} min break
-            </span>
-          </div>
-        )}
-      </div>
+          )}
+          {s.kind === "stopwatch" && (
+            <div className="laps">
+              {s.laps.length === 0 ? (
+                <span className="dim">Laps appear here</span>
+              ) : (
+                s.laps.slice(0, 3).map((t, i) => (
+                  <span key={s.laps.length - i} className="lap">
+                    <span className="dim">Lap {s.laps.length - i}</span>
+                    <span>{fmtClock(t - (s.laps[i + 1] ?? 0), { tenths: true })}</span>
+                  </span>
+                ))
+              )}
+            </div>
+          )}
+          {s.kind === "focus" && (
+            <div className="row" style={{ gap: 10, width: "100%" }}>
+              <div className="row" style={{ gap: 6 }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <motion.span
+                    key={i}
+                    className="round-dot"
+                    animate={{ backgroundColor: i < s.rounds % 4 || (s.rounds > 0 && s.rounds % 4 === 0 && s.phase === "break") ? ORANGE : "rgba(118,118,128,0.4)" }}
+                  />
+                ))}
+              </div>
+              <span className="dim" style={{ fontSize: 13, fontWeight: 500 }}>
+                {s.focusMin} min focus · {s.breakMin} min break
+              </span>
+            </div>
+          )}
+        </div>
+      </ModeSwitch>
     </div>
   );
 }
@@ -119,6 +118,7 @@ export function ClockPanel({ width, height }: { width: number; height: number })
  * switching island tabs), and you can click-drag the row like a touch list.
  */
 const hScroll = {
+  "data-no-lift": "",
   onWheel(e: React.WheelEvent<HTMLDivElement>) {
     const el = e.currentTarget;
     if (el.scrollWidth <= el.clientWidth) return;

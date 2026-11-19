@@ -107,6 +107,27 @@ mod imp {
             let end = tag[start..].find('"')? + start;
             Some(tag[start..end].replace("&amp;", "&").replace("&quot;", "\"").replace("&apos;", "'"))
         };
+        // A toast about a file (WhatsApp "Downloaded video.mp4", a browser download…) uses
+        // the logo slot for the file type's icon, not a person.
+        let texts: String = xml
+            .split("<text")
+            .skip(1)
+            .filter_map(|t| t.split_once('>').map(|(_, rest)| rest.split("</text>").next().unwrap_or("")))
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase();
+        let about_file = texts.contains("download")
+            || texts.split(|c: char| c.is_whitespace() || c == '"' || c == '\'' ).any(|w| {
+                let w = w.trim_end_matches(|c: char| matches!(c, '.' | ',' | ')' | '!' | '?'));
+                w.rsplit_once('.').is_some_and(|(stem, ext)| {
+                    !stem.is_empty()
+                        && matches!(
+                            ext,
+                            "mp4" | "mkv" | "mov" | "avi" | "webm" | "mp3" | "wav" | "flac" | "m4a" | "ogg" | "opus" | "jpg" | "jpeg" | "png" | "gif" | "webp" | "heic" | "pdf" | "doc"
+                                | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "txt" | "zip" | "rar" | "7z" | "exe" | "msi" | "apk" | "csv"
+                        )
+                })
+            });
         let mut out = Pictures::default();
         if tags.is_empty() {
             eprintln!("[notify] toast has no images");
@@ -115,9 +136,13 @@ mod imp {
             let Some(src) = attr(t, "src") else { continue };
             eprintln!("[notify] toast image ({}): {}", attr(t, "placement").unwrap_or_else(|| "inline".into()), src.chars().take(160).collect::<String>());
             match attr(t, "placement").as_deref() {
-                Some("appLogoOverride") if out.avatar.is_none() => {
+                // The logo override is normally the sender (Discord, Teams, WhatsApp chats…).
+                // On a toast about a file it's the file type's icon (e.g. WhatsApp
+                // "Downloaded video.mp4" shows the video player's icon) — skip it then,
+                // so the app's own logo is used.
+                Some("appLogoOverride") if out.avatar.is_none() && !about_file => {
                     out.avatar = load_image(&src);
-                    out.round = attr(t, "hint-crop").as_deref() == Some("circle");
+                    out.round = true; // a person: shown round, like iOS
                 }
                 Some("appLogoOverride") => {}
                 _ if out.attachment.is_none() => out.attachment = load_image(&src),

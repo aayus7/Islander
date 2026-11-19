@@ -15,19 +15,25 @@ pub struct PrivacyState {
 #[cfg(windows)]
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || {
+        // Live camera use comes from Windows' sensor activity monitor (the registry only
+        // records camera sessions once they end); keep it alive for the thread's life.
+        let _monitor = sensors::start();
         let mut last = PrivacyState::default();
+        eprintln!("[privacy] recent camera use: {:?}", reg::recent("webcam"));
         loop {
-            let cam = reg::in_use("webcam");
+            let mut cam = sensors::streaming_apps();
+            cam.extend(reg::in_use("webcam"));
             let mic = reg::in_use("microphone");
             let mut apps: Vec<String> = cam.iter().chain(mic.iter()).cloned().collect();
             apps.sort();
             apps.dedup();
             let now = PrivacyState { camera: !cam.is_empty(), mic: !mic.is_empty(), apps };
             if now != last {
+                eprintln!("[privacy] camera: {} · mic: {} {:?}", now.camera, now.mic, now.apps);
                 let _ = app.emit("privacy://update", &now);
                 last = now;
             }
-            std::thread::sleep(std::time::Duration::from_millis(1200));
+            std::thread::sleep(std::time::Duration::from_millis(700));
         }
     });
 }
@@ -79,6 +85,19 @@ pub mod reg {
         (r == ERROR_SUCCESS).then_some(v)
     }
 
+    pub fn string(k: &Key, name: &str) -> Option<String> {
+        let n = HSTRING::from(name);
+        let mut buf = vec![0u16; 1024];
+        let mut size = (buf.len() * 2) as u32;
+        let r = unsafe { RegGetValueW(k.0, PCWSTR::null(), PCWSTR(n.as_ptr()), RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, None, Some(buf.as_mut_ptr() as *mut _), Some(&mut size)) };
+        if r != ERROR_SUCCESS {
+            return None;
+        }
+        let len = (size as usize / 2).min(buf.len());
+        let end = buf[..len].iter().position(|&c| c == 0).unwrap_or(len);
+        Some(String::from_utf16_lossy(&buf[..end]))
+    }
+
     pub fn dword(k: &Key, name: &str) -> Option<u32> {
         let n = HSTRING::from(name);
         let mut v = 0u32;
@@ -92,8 +111,14 @@ pub mod reg {
         unsafe { RegSetValueExW(k.0, PCWSTR(n.as_ptr()), None, REG_DWORD, Some(&v.to_le_bytes())) == ERROR_SUCCESS }
     }
 
+    /// In use right now: it has started, and hasn't stopped since (Windows writes a 0
+    /// stop time while in use, but some apps leave an older stop time behind).
     fn active(k: &Key) -> bool {
-        matches!((qword(k, "LastUsedTimeStart"), qword(k, "LastUsedTimeStop")), (Some(s), Some(0)) if s > 0)
+        match (qword(k, "LastUsedTimeStart"), qword(k, "LastUsedTimeStop")) {
+            (Some(start), Some(stop)) => start > 0 && (stop == 0 || stop < start),
+            (Some(start), None) => start > 0,
+            _ => false,
+        }
     }
 
     /// Friendly-ish app name from a ConsentStore key name.
@@ -105,10 +130,47 @@ pub mod reg {
         last.rsplit('.').next().unwrap_or(last).to_string()
     }
 
-    /// Apps currently using `capability` ("webcam" | "microphone").
+    /// Apps currently using `capability` ("webcam" | "microphone"). Windows records
+    /// use per user (HKCU) and, for some apps and services, machine-wide (HKLM).
     pub fn in_use(capability: &str) -> Vec<String> {
         let mut apps = Vec::new();
-        let Some(root) = open(HKEY_CURRENT_USER, &format!(r"{BASE}\{capability}"), KEY_READ) else { return apps };
+        for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+            scan(root, capability, &mut apps);
+        }
+        apps.sort();
+        apps.dedup();
+        apps
+    }
+
+    /// Debug: the most recently used apps for a capability, with their raw times.
+    pub fn recent(capability: &str) -> Vec<String> {
+        let mut rows: Vec<(u64, String)> = Vec::new();
+        for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+            let Some(r) = open(root, &format!(r"{BASE}\{capability}"), KEY_READ) else { continue };
+            let mut visit = |k: &Key, name: &str| {
+                if let Some(s) = qword(k, "LastUsedTimeStart") {
+                    rows.push((s, format!("{} start={} stop={:?}", pretty(name), s, qword(k, "LastUsedTimeStop"))));
+                }
+            };
+            for name in subkeys(&r) {
+                let Some(k) = open(r.0, &name, KEY_READ) else { continue };
+                if name == "NonPackaged" {
+                    for sub in subkeys(&k) {
+                        if let Some(s) = open(k.0, &sub, KEY_READ) {
+                            visit(&s, &sub);
+                        }
+                    }
+                } else {
+                    visit(&k, &name);
+                }
+            }
+        }
+        rows.sort_by(|a, b| b.0.cmp(&a.0));
+        rows.into_iter().take(3).map(|r| r.1).collect()
+    }
+
+    fn scan(base: HKEY, capability: &str, apps: &mut Vec<String>) {
+        let Some(root) = open(base, &format!(r"{BASE}\{capability}"), KEY_READ) else { return };
         for name in subkeys(&root) {
             let Some(k) = open(root.0, &name, KEY_READ) else { continue };
             if name == "NonPackaged" {
@@ -123,6 +185,72 @@ pub mod reg {
                 apps.push(pretty(&name));
             }
         }
-        apps
+    }
+}
+
+/// Live camera activity via Media Foundation's sensor activity monitor: Windows
+/// reports which processes are streaming from each camera, as it happens.
+#[cfg(windows)]
+mod sensors {
+    use std::collections::HashSet;
+    use std::sync::Mutex;
+    use windows::core::{implement, Ref};
+    use windows::Win32::Media::MediaFoundation::*;
+
+    static STREAMING: Mutex<Option<HashSet<u32>>> = Mutex::new(None);
+
+    #[implement(IMFSensorActivitiesReportCallback)]
+    struct Watcher;
+
+    impl IMFSensorActivitiesReportCallback_Impl for Watcher_Impl {
+        fn OnActivitiesReport(&self, report: Ref<'_, IMFSensorActivitiesReport>) -> windows::core::Result<()> {
+            let mut pids = HashSet::new();
+            if let Some(report) = report.as_ref() {
+                unsafe {
+                    for i in 0..report.GetCount().unwrap_or(0) {
+                        let Ok(device) = report.GetActivityReport(i) else { continue };
+                        for j in 0..device.GetProcessCount().unwrap_or(0) {
+                            let Ok(p) = device.GetProcessActivity(j) else { continue };
+                            if p.GetStreamingState().map(|b| b.as_bool()).unwrap_or(false) {
+                                if let Ok(pid) = p.GetProcessId() {
+                                    pids.insert(pid);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            *STREAMING.lock().unwrap() = Some(pids);
+            Ok(())
+        }
+    }
+
+    /// Starts watching; returns the monitor (dropping it stops the reports).
+    pub fn start() -> Option<IMFSensorActivityMonitor> {
+        unsafe {
+            if let Err(e) = MFStartup(MF_VERSION, MFSTARTUP_FULL) {
+                eprintln!("[privacy] camera monitor unavailable ({e})");
+                return None;
+            }
+            let cb: IMFSensorActivitiesReportCallback = Watcher.into();
+            match MFCreateSensorActivityMonitor(&cb).and_then(|m| m.Start().map(|_| m)) {
+                Ok(m) => Some(m),
+                Err(e) => {
+                    eprintln!("[privacy] camera monitor unavailable ({e})");
+                    None
+                }
+            }
+        }
+    }
+
+    /// Names of the apps streaming from a camera right now.
+    pub fn streaming_apps() -> Vec<String> {
+        let pids: Vec<u32> = STREAMING.lock().unwrap().as_ref().map(|s| s.iter().copied().collect()).unwrap_or_default();
+        pids.into_iter()
+            .map(|pid| {
+                let stem = crate::audio::meters::exe_stem(pid).0;
+                if stem.is_empty() { format!("pid {pid}") } else { stem }
+            })
+            .collect()
     }
 }

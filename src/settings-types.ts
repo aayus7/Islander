@@ -21,6 +21,8 @@ export interface AppSettings {
   aiModel: string;
   aiRelayUrl: string;
   aiGlass: boolean;
+  /** Show the island in Islander's own screen recordings. */
+  showInRecordings: boolean;
   deviceId: string;
 
   // ---- modules & workspace ----
@@ -47,19 +49,35 @@ export interface AppSettings {
   frameRate: number;
   /** Replace Windows' volume flyout and notification banners with the island's. */
   takeover: boolean;
+  launchAtLogin: boolean;
+  /** Screen edge the island lives on, and where along it. */
+  dock: Dock;
+  dockAlong: DockAlong;
+  /** The one-time "you can move the island" tip was shown. */
+  moveTipShown: boolean;
+  /** "inter" = bundled Inter (default); "system" = SF Pro if installed, else Segoe UI. */
+  font: "inter" | "system";
+  /** Nearby sharing (LocalSend) in the Shelf. */
+  nearbySharing: boolean;
+  /** Name other devices see ("" = this PC's name). */
+  nearbyName: string;
 }
 
-export type ModuleId = "ai" | "media" | "today" | "clock" | "notes" | "shelf" | "clipboard" | "stats" | "controls";
+export type Dock = "top" | "bottom" | "left" | "right";
+export type DockAlong = "start" | "center" | "end";
+
+export type ModuleId = "ai" | "media" | "today" | "weather" | "clock" | "notes" | "shelf" | "clipboard" | "stats" | "controls";
 export const ALL_MODULES: { id: ModuleId; label: string }[] = [
   { id: "ai", label: "Search or Ask" },
   { id: "media", label: "Now Playing" },
-  { id: "today", label: "Today & Weather" },
+  { id: "controls", label: "Controls & Launcher" },
+  { id: "today", label: "Today" },
+  { id: "weather", label: "Weather" },
   { id: "clock", label: "Timer & Focus" },
   { id: "notes", label: "Notes & To-Do" },
   { id: "shelf", label: "File Shelf" },
   { id: "clipboard", label: "Clipboard" },
   { id: "stats", label: "System Monitor" },
-  { id: "controls", label: "Controls & Launcher" },
 ];
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -77,9 +95,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   idleStyle: "notch",
   aiHotkey: "Ctrl+Alt+Space",
   aiApiKey: "",
-  aiModel: "gemini-flash-lite-latest",
+  aiModel: "gemini-3.5-flash-lite",
   aiRelayUrl: "",
   aiGlass: true,
+  showInRecordings: true,
   deviceId: "0123456789abcdef0123456789abcdef",
   modules: ALL_MODULES.map((m) => m.id),
   weatherCity: "",
@@ -93,6 +112,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoHide: false,
   frameRate: 60,
   takeover: true,
+  launchAtLogin: true,
+  dock: "top",
+  dockAlong: "center",
+  moveTipShown: false,
+  font: "inter",
+  nearbySharing: true,
+  nearbyName: "",
 };
 
 export const THEME_RGB: Record<Theme, [number, number, number]> = {

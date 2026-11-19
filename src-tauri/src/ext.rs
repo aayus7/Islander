@@ -85,6 +85,8 @@ pub struct Download {
     pub state: String,
     #[serde(skip_deserializing)]
     pub browser: String,
+    /// Bytes per second (download managers report it; 0 when unknown).
+    pub speed: f64,
 }
 
 static DOWNLOADS: Mutex<Option<HashMap<String, Vec<Download>>>> = Mutex::new(None);
@@ -95,7 +97,7 @@ pub fn set_app(app: tauri::AppHandle) {
     let _ = APP.set(app);
 }
 
-fn emit_downloads(browser: &str, items: Option<Vec<Download>>) {
+pub(crate) fn emit_downloads(browser: &str, items: Option<Vec<Download>>) {
     use tauri::Emitter;
     let all: Vec<Download> = {
         let mut g = DOWNLOADS.lock().unwrap();
@@ -150,6 +152,14 @@ pub fn command(browser: &str, key: &str, action: &str) -> Result<(), String> {
         None => (action, None),
     };
     let msg = serde_json::json!({ "type": "cmd", "key": key, "action": act, "value": value }).to_string();
+    with_conns(|c| match c.get(browser) {
+        Some(conn) => conn.tx.send(msg).map_err(|e| e.to_string()),
+        None => Err(format!("{browser} extension not connected")),
+    })
+}
+
+/// Send a raw message to one browser's extension.
+pub fn send_raw(browser: &str, msg: String) -> Result<(), String> {
     with_conns(|c| match c.get(browser) {
         Some(conn) => conn.tx.send(msg).map_err(|e| e.to_string()),
         None => Err(format!("{browser} extension not connected")),

@@ -63,10 +63,11 @@ export function useArtColor(src: string | null, seed = "") {
           const d = ctx.getImageData(0, 0, N, N).data;
           let r = 0, g = 0, b = 0, wsum = 0;
           for (let i = 0; i < d.length; i += 4) {
-            const R = d[i], G = d[i + 1], B = d[i + 2];
+            const R = d[i], G = d[i + 1], B = d[i + 2], A = d[i + 3] / 255;
             const max = Math.max(R, G, B), min = Math.min(R, G, B);
             const sat = max === 0 ? 0 : (max - min) / max;
-            const w = 0.05 + sat * sat * (max / 255);
+            // Transparent pixels (app icons) don't count.
+            const w = (0.05 + sat * sat * (max / 255)) * A;
             r += R * w; g += G * w; b += B * w; wsum += w;
           }
           if (wsum > 0) {

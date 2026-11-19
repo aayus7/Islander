@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge, type MediaSession, type MediaState } from "./bridge";
 import { Island } from "./island/Island";
+import { usePosterArt } from "./lib/posters";
 
 export function App() {
   const [media, setMedia] = useState<MediaState>({ sessions: [], currentId: null });
@@ -21,12 +22,14 @@ export function App() {
     wasPlaying.current = now;
   }, [media, selectedId]);
 
-  const session = pickSession(media, selectedId);
+  // Movies/episodes in video players get their poster as artwork.
+  const sessions = usePosterArt(media.sessions);
+  const session = pickSession({ ...media, sessions }, selectedId);
 
   return (
     <Island
       session={session}
-      sessions={media.sessions}
+      sessions={sessions}
       onSelect={setSelectedId}
       onCommand={(id, a) => bridge.mediaCommand(id, a)}
     />

@@ -4,16 +4,28 @@
 mod audio;
 mod battery;
 mod clipboard;
+mod dlmgr;
+mod posters;
+mod updater;
 mod dragout;
+mod dropin;
 mod ext;
 mod glass;
 mod hud;
 mod media;
+mod mic;
+mod screenrec;
+mod localsend;
+mod localsend_core;
+mod speech;
 mod notify;
 mod outputs;
+mod power;
 mod privacy;
+mod radios;
 mod settings;
 mod shelf;
+mod startup;
 mod sysmon;
 mod system;
 mod takeover;
@@ -26,7 +38,7 @@ use settings::{Settings, Store};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuEvent, SubmenuBuilder};
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, WebviewUrl, WebviewWindow,
@@ -40,6 +52,8 @@ const WIN_W: f64 = 560.0;
 const WIN_H: f64 = 480.0; // tall enough for the AI panel; everything outside the island is click-through
 /// Extra px around the island that still counts as "on the island".
 const HIT_MARGIN: f64 = 4.0;
+/// Extra slack while the island is open (see the hit tester).
+const HIT_MARGIN_OPEN: f64 = 12.0;
 
 /* ------------------------------------------------------------------ state */
 
@@ -161,7 +175,23 @@ async fn set_output(id: String) -> Result<(), String> {
 /// Lets the UI write to this console window (AI request tracing etc.).
 #[tauri::command]
 fn ui_log(msg: String) {
+    log_line(msg);
+}
+
+/// Log a line (stderr; development builds also append it to island-debug.log).
+pub(crate) fn log_line(msg: String) {
     eprintln!("[ui] {msg}");
+    // Development builds also keep a log file in the project folder, so problems
+    // can be looked into after the fact.
+    #[cfg(debug_assertions)]
+    {
+        use std::io::Write;
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("island-debug.log");
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+            let _ = writeln!(f, "{t} {msg}");
+        }
+    }
 }
 
 #[tauri::command]
@@ -245,6 +275,11 @@ fn set_hidden(app: AppHandle, state: tauri::State<'_, St>, hidden: bool) {
 /* ------------------------------------------------------------------- main */
 
 fn main() {
+    // Uninstaller / repair: give Windows back its own notification banners, then quit.
+    if std::env::args().any(|a| a == "--restore-windows") {
+        takeover::restore_from_backup_file();
+        return;
+    }
     // If anything ever crashes, leave a note explaining why (next to settings.json).
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("[{:?}] island crashed: {info}\n", std::time::SystemTime::now());
@@ -257,7 +292,15 @@ fn main() {
             }
         }
     }));
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Release: one Islander at a time. Opening it again (Start menu, desktop shortcut)
+    // brings up Settings in the copy that's already running, like any desktop app.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        let _ = open_settings_window(app);
+    }));
+    builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -277,6 +320,40 @@ fn main() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            localsend::localsend_peers,
+            localsend::localsend_scan,
+            localsend::localsend_send,
+            localsend::localsend_respond,
+            localsend::localsend_cancel,
+            localsend::localsend_info,
+            localsend::localsend_allow_firewall,
+            screenrec::rec_start,
+            screenrec::rec_status,
+            screenrec::rec_pause,
+            screenrec::rec_resume,
+            screenrec::rec_stop,
+            mic::mic_start,
+            mic::mic_stop,
+            mic::mic_cancel,
+            speech::speech_start,
+            speech::speech_stop,
+            speech::speech_cancel,
+            dropin::drop_attach,
+            startup::open_extension_folder,
+            power::power_status,
+            power::brightness_get,
+            power::brightness_set,
+            power::volume_get,
+            power::volume_set,
+            radios::wifi_state,
+            radios::wifi_set,
+            radios::wifi_connect,
+            radios::wifi_disconnect,
+            radios::bt_state,
+            radios::bt_set,
+            radios::bt_connect,
+            radios::airplane_state,
+            radios::airplane_set,
             set_hit_rects,
             media_command,
             media_refresh,
@@ -307,6 +384,13 @@ fn main() {
             system::file_icon,
             system::notify_open,
             system::reveal_path,
+            dlmgr::download_cancel,
+            posters::movie_poster,
+            island_move_start,
+            island_move_anchor,
+            updater::update_check,
+            updater::update_status,
+            updater::update_install,
             dragout::drag_out,
             shelf::shelf_list,
             shelf::shelf_elevated,
@@ -324,8 +408,10 @@ fn main() {
         ])
         .on_menu_event(handle_menu_event)
         .setup(|app| {
-            #[cfg(windows)]
+            // Development: a restart that didn't shut the old copy down gets replaced.
+            #[cfg(all(windows, debug_assertions))]
             win::close_other_instances();
+            ui_log(format!("startup: elevated={} exe={:?}", shelf::shelf_elevated(), std::env::current_exe().ok()));
             if shelf::shelf_elevated() {
                 eprintln!("NOTE: Islander is running as administrator. Windows blocks dragging files from Explorer onto admin apps, so the Shelf can't receive drops. Start it without admin rights.");
             }
@@ -345,9 +431,19 @@ fn main() {
             let win = app.get_webview_window("island").expect("island window missing");
             let s = state.store.get();
             settings::FPS.store(s.frame_rate, Ordering::Relaxed);
+            // Keep the login entry pointing at this copy (it moves on reinstall/update).
+            startup::set(s.launch_at_login);
             place_island(&win, &state, &s, None)?;
             #[cfg(windows)]
             win::apply_overlay_styles(&win);
+            #[cfg(all(windows, debug_assertions))]
+            {
+                let w2 = win.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(6));
+                    ui_log(format!("drop probe: {}", win::probe_drop_targets(&w2)));
+                });
+            }
             // Everything except the island itself is click-through.
             win.set_ignore_cursor_events(true)?;
             win.show()?;
@@ -363,6 +459,8 @@ fn main() {
             takeover::spawn_keys();
             takeover::set_banners(app.handle(), s.notifications && s.takeover);
             ext::set_app(app.handle().clone());
+            dlmgr::spawn();
+            updater::spawn(app.handle().clone());
             ext::spawn(media::mark_dirty);
             sysmon::spawn(app.handle().clone());
             privacy::spawn(app.handle().clone());
@@ -370,6 +468,9 @@ fn main() {
             clipboard::spawn(app.handle().clone());
             notify::spawn(app.handle().clone());
             battery::spawn(app.handle().clone());
+            power::spawn(app.handle().clone());
+            radios::spawn(app.handle().clone());
+            localsend::spawn(app.handle().clone(), s.nearby_sharing, s.nearby_name.clone());
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -387,6 +488,10 @@ fn main() {
 fn apply_settings(app: &AppHandle, state: &St, old: &Settings, new: &Settings) {
     settings::FPS.store(new.frame_rate, Ordering::Relaxed);
     takeover::KEYS.store(new.hud && new.takeover, Ordering::Relaxed);
+    #[cfg(windows)]
+    if (old.hud && old.takeover) && !(new.hud && new.takeover) {
+        takeover::restore_osd();
+    }
     let banners = |s: &Settings| s.notifications && s.takeover;
     if banners(old) != banners(new) {
         takeover::set_banners(app, banners(new));
@@ -399,6 +504,15 @@ fn apply_settings(app: &AppHandle, state: &St, old: &Settings, new: &Settings) {
         if moved {
             let _ = place_island(&win, state, new, None);
         }
+    }
+    if old.show_in_recordings != new.show_in_recordings {
+        screenrec::island_in_recording(app, new.show_in_recordings);
+    }
+    if old.launch_at_login != new.launch_at_login {
+        startup::set(new.launch_at_login);
+    }
+    if old.nearby_sharing != new.nearby_sharing || old.nearby_name != new.nearby_name {
+        localsend::configure(new.nearby_sharing, &new.nearby_name);
     }
     if old.hide_hotkey != new.hide_hotkey {
         register_hotkey(app, &old.hide_hotkey, &new.hide_hotkey);
@@ -480,14 +594,241 @@ fn place_island(win: &WebviewWindow, state: &St, s: &Settings, follow: Option<Mo
     let scale = mon.scale_factor();
     let (w, h) = (WIN_W * s.size_scale, WIN_H * s.size_scale);
     win.set_size(LogicalSize::new(w, h))?;
-    let pos = mon.position();
-    let size = mon.size();
-    let w_phys = (w * scale).round() as i32;
-    let x = pos.x + (size.width as i32 - w_phys) / 2 + (s.offset_x * scale).round() as i32;
-    let y = pos.y + (s.offset_y * scale).round() as i32;
-    win.set_position(PhysicalPosition::new(x, y))?;
+    let _ = scale;
+    win.set_position(dock_position(&mon, s))?;
     *state.monitor_key.lock().unwrap() = monitor_key(&mon);
     Ok(())
+}
+
+/// Where the island window goes for its dock: flush against that screen edge (the island
+/// sits against the matching edge of its window), at the start, centre or end of it.
+/// The top edge uses the whole display; the others stay clear of the taskbar.
+fn dock_position(mon: &Monitor, s: &Settings) -> PhysicalPosition<i32> {
+    let scale = mon.scale_factor();
+    let w = (WIN_W * s.size_scale * scale).round() as i32;
+    let h = (WIN_H * s.size_scale * scale).round() as i32;
+    let (mx, my) = (mon.position().x, mon.position().y);
+    let mw = mon.size().width as i32;
+    let wa = mon.work_area();
+    let (wx, wy, ww, wh) = (wa.position.x, wa.position.y, wa.size.width as i32, wa.size.height as i32);
+    let along = |lo: i32, len: i32, size: i32| match s.dock_along.as_str() {
+        "start" => lo,
+        "end" => lo + len - size,
+        _ => lo + (len - size) / 2,
+    };
+    match s.dock.as_str() {
+        "bottom" => PhysicalPosition::new(along(wx, ww, w), wy + wh - h),
+        "left" => PhysicalPosition::new(wx, along(wy, wh, h)),
+        "right" => PhysicalPosition::new(wx + ww - w, along(wy, wh, h)),
+        _ => {
+            let nudge = if s.dock_along == "center" { (s.offset_x * scale).round() as i32 } else { 0 };
+            PhysicalPosition::new(along(mx, mw, w) + nudge, my + (s.offset_y * scale).round() as i32)
+        }
+    }
+}
+
+/* ------------------------------------------------------------ moving the island */
+//
+// Press and hold the island (or right-click → Move Island…): it lifts and follows the
+// mouse, glowing drop zones appear along every screen edge, and letting go docks it to
+// the nearest one — top, bottom, left or right, at the start, middle or end.
+
+static MOVING: AtomicBool = AtomicBool::new(false);
+/// Where the island's centre is inside its window (logical px), so it stays under the cursor.
+static ANCHOR: std::sync::Mutex<(f64, f64)> = std::sync::Mutex::new((280.0, 26.0));
+
+#[tauri::command]
+fn island_move_anchor(x: f64, y: f64) {
+    *ANCHOR.lock().unwrap() = (x, y);
+}
+
+/// `click`: from the menu — follow the mouse until the next click. Otherwise (press and
+/// hold) until the button is released.
+#[tauri::command]
+fn island_move_start(app: AppHandle, click: bool) {
+    start_move(&app, click);
+}
+
+fn start_move(app: &AppHandle, click: bool) {
+    if MOVING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let _ = app.emit("move://begin", ());
+    let app = app.clone();
+    std::thread::spawn(move || {
+        #[cfg(windows)]
+        run_move(&app, click);
+        #[cfg(not(windows))]
+        let _ = click;
+        MOVING.store(false, Ordering::SeqCst);
+        let _ = app.emit("move://end", ());
+    });
+}
+
+/// The nearest screen edge to the cursor, and which third of it.
+fn zone_at(mon: &Monitor, x: i32, y: i32) -> (&'static str, &'static str) {
+    let (mx, my) = (mon.position().x, mon.position().y);
+    let (mw, mh) = (mon.size().width as i32, mon.size().height as i32);
+    let edges = [("top", y - my), ("bottom", my + mh - y), ("left", x - mx), ("right", mx + mw - x)];
+    let dock = edges.iter().min_by_key(|e| e.1).map(|e| e.0).unwrap_or("top");
+    let t = if dock == "top" || dock == "bottom" { (x - mx) as f64 / mw as f64 } else { (y - my) as f64 / mh as f64 };
+    let along = if t < 1.0 / 3.0 {
+        "start"
+    } else if t > 2.0 / 3.0 {
+        "end"
+    } else {
+        "center"
+    };
+    (dock, along)
+}
+
+/// The full-screen layer that shows the drop zones while moving (made on first use).
+fn zones_window(app: &AppHandle) -> Option<WebviewWindow> {
+    if let Some(w) = app.get_webview_window("zones") {
+        return Some(w);
+    }
+    let w = WebviewWindowBuilder::new(app, "zones", WebviewUrl::default())
+        .title("Islander zones")
+        .decorations(false)
+        .transparent(true)
+        .background_color(tauri::window::Color(0, 0, 0, 0))
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focused(false)
+        .focusable(false)
+        .resizable(false)
+        .shadow(false)
+        .visible(false)
+        .additional_browser_args(BROWSER_ARGS)
+        .build()
+        .ok()?;
+    let _ = w.set_ignore_cursor_events(true);
+    Some(w)
+}
+
+#[cfg(windows)]
+fn run_move(app: &AppHandle, click: bool) {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE, VK_LBUTTON};
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    let Some(win) = app.get_webview_window("island") else { return };
+    let state = app.state::<St>();
+    let ss = state.store.get().size_scale;
+    let pressed = |vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY| unsafe { (GetAsyncKeyState(vk.0 as i32) as u16) & 0x8000 != 0 };
+    // The drop-zone layer is made in the background the first time, so the island
+    // starts following the mouse at once.
+    if app.get_webview_window("zones").is_none() {
+        let a = app.clone();
+        std::thread::spawn(move || {
+            let _ = zones_window(&a);
+        });
+    }
+    let mut zones: Option<WebviewWindow> = None;
+    let mut zones_on: Option<String> = None; // display the zones layer is showing on
+    let mut last: Option<(&'static str, &'static str, Monitor)> = None;
+    let mut seen_down = !click;
+    let mut cancelled = false;
+    // The island keeps the spot inside its window where it was picked up (ANCHOR, set by
+    // the frontend); the window trails the cursor with a little weight.
+    let anchor = || *ANCHOR.lock().unwrap();
+    let mut pos = win.outer_position().map(|p| (p.x as f64, p.y as f64)).unwrap_or((0.0, 0.0));
+    let mut scale = win.scale_factor().unwrap_or(1.0);
+    let mut prev = Instant::now();
+    let t0 = prev;
+    loop {
+        std::thread::sleep(Duration::from_millis(6));
+        let dt = prev.elapsed().as_secs_f64().clamp(0.001, 0.05);
+        prev = Instant::now();
+        if pressed(VK_ESCAPE) || t0.elapsed() > Duration::from_secs(90) {
+            cancelled = true;
+            break;
+        }
+        let down = pressed(VK_LBUTTON);
+        if click {
+            if down {
+                seen_down = true;
+            } else if seen_down {
+                break;
+            }
+        } else if !down {
+            break;
+        }
+        let mut p = POINT::default();
+        unsafe {
+            let _ = GetCursorPos(&mut p);
+        }
+        let Some(mon) = win.monitor_from_point(p.x as f64, p.y as f64).ok().flatten() else { continue };
+        scale = mon.scale_factor();
+        let (cx, cy) = anchor();
+        let target = (p.x as f64 - cx * scale, p.y as f64 - cy * scale);
+        let k = 1.0 - (-dt / 0.04).exp();
+        pos.0 += (target.0 - pos.0) * k;
+        pos.1 += (target.1 - pos.1) * k;
+        let _ = win.set_position(PhysicalPosition::new(pos.0.round() as i32, pos.1.round() as i32));
+        // Drop zones on the display under the cursor.
+        if zones.is_none() {
+            zones = app.get_webview_window("zones");
+        }
+        let key = monitor_key(&mon);
+        if let Some(z) = &zones {
+            if zones_on.as_deref() != Some(key.as_str()) {
+                let _ = z.set_position(*mon.position());
+                let _ = z.set_size(*mon.size());
+                let _ = z.show();
+                // Keep the island above its own drop zones.
+                win::stack_above(&win, Some(z));
+                zones_on = Some(key);
+                let _ = app.emit("move://begin", ());
+            }
+        }
+        let (dock, along) = zone_at(&mon, p.x, p.y);
+        if last.as_ref().map(|l| (l.0, l.1)) != Some((dock, along)) {
+            let _ = app.emit("move://zone", json!({ "dock": dock, "along": along }));
+        }
+        last = Some((dock, along, mon));
+    }
+    if let Some(z) = &zones {
+        let _ = z.hide();
+    }
+    // Where the window goes: the chosen spot, or back where it was (Esc).
+    let (old, new, to) = match last.filter(|_| !cancelled) {
+        Some((dock, along, mon)) => {
+            let old_s = state.store.get();
+            let mut patch = json!({ "dock": dock, "dockAlong": along, "offsetX": 0.0, "offsetY": 0.0, "moveTipShown": true });
+            if old_s.monitor != "follow" {
+                let key = monitor_key(&mon);
+                let primary = win.primary_monitor().ok().flatten().map(|m| monitor_key(&m));
+                patch["monitor"] = json!(if primary.as_deref() == Some(key.as_str()) {
+                    "primary".to_string()
+                } else {
+                    win.available_monitors().unwrap_or_default().iter().position(|m| monitor_key(m) == key).map(|i| i.to_string()).unwrap_or_else(|| "primary".into())
+                });
+            }
+            let (old, new) = state.store.update(patch);
+            let to = dock_position(&mon, &new);
+            (Some(old), new, to)
+        }
+        None => {
+            let s = state.store.get();
+            let Some(mon) = pick_monitor(&win, &s, None) else { return };
+            let to = dock_position(&mon, &s);
+            (None, s, to)
+        }
+    };
+    // The window jumps to its new place; the island inside starts where it is on screen
+    // right now and springs into its spot (the frontend animates that from this offset).
+    let (cx, cy) = anchor();
+    let rel_x = (pos.0 + cx * scale - to.x as f64) / scale / ss;
+    let rel_y = (pos.1 + cy * scale - to.y as f64) / scale / ss;
+    let _ = app.emit("move://landing", json!({ "x": rel_x, "y": rel_y }));
+    std::thread::sleep(Duration::from_millis(12));
+    let _ = win.set_position(to);
+    match old {
+        Some(old) => apply_settings(app, &state, &old, &new),
+        None => {
+            let _ = place_island(&win, &state, &new, None);
+        }
+    }
 }
 
 /* ------------------------------------------------------------ hit testing */
@@ -503,17 +844,22 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
         let mut tick: u32 = 0;
         // Hidden because a fullscreen app is in front (not the user's own "hide").
         let mut fs_hidden = false;
+        // A change must be seen twice in a row (~1 s) before acting, so brief focus
+        // changes (a toast, a menu, the "Press Esc" bubble) don't make the island blink.
+        let mut fs_pending = 0u8;
         loop {
             std::thread::sleep(Duration::from_millis(16));
             tick = tick.wrapping_add(1);
 
             #[cfg(windows)]
-            if tick % 30 == 0 && !state.hidden.load(Ordering::Relaxed) {
+            if tick % 30 == 0 && !state.hidden.load(Ordering::Relaxed) && !MOVING.load(Ordering::Relaxed) {
                 if let Some(win) = app.get_webview_window("island") {
                     let want = state.store.get().hide_in_fullscreen && win::fullscreen_in_front(&win);
-                    if want != fs_hidden {
+                    fs_pending = if want != fs_hidden { fs_pending + 1 } else { 0 };
+                    if fs_pending >= 2 {
+                        fs_pending = 0;
                         fs_hidden = want;
-                        eprintln!("[island] {}", if want { "hiding: a fullscreen app is in front" } else { "back: fullscreen app closed" });
+                        eprintln!("[island] {} [{}]", if want { "hiding: a fullscreen app is in front" } else { "back: fullscreen app closed" }, win::fullscreen_why());
                         if want {
                             let _ = app.emit("island://hover", false);
                             let _ = win.hide();
@@ -540,7 +886,7 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
             };
 
             // Follow mouse: hop to the monitor under the cursor (twice a second, never mid-hover).
-            if tick % 30 == 0 && !interactive {
+            if tick % 30 == 0 && !interactive && !MOVING.load(Ordering::Relaxed) {
                 let s = state.store.get();
                 if s.monitor == "follow" {
                     if let Ok(Some(m)) = win.monitor_from_point(cursor.x, cursor.y) {
@@ -557,8 +903,15 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
             let held = state.hold.load(Ordering::Relaxed);
             let (on_island, on_bubble) = {
                 let h = state.hit.lock().unwrap();
+                let i = h.island;
+                // Hysteresis: once the island is open, the cursor has to move clearly away
+                // before it closes, so resting right on its edge can't make it flicker
+                // open/closed. The strip between the island and the top of the screen
+                // counts as the island too (push the mouse to the top edge to open it).
+                let m = if hovering { HIT_MARGIN_OPEN } else { HIT_MARGIN };
+                let above = i.w > 0.0 && ly >= -1.0 && ly < i.y && lx >= i.x - m && lx <= i.x + i.w + m;
                 (
-                    held || h.island.contains(lx, ly, HIT_MARGIN),
+                    held || above || i.contains(lx, ly, m),
                     h.bubble.map_or(false, |b| b.contains(lx, ly, 2.0)),
                 )
             };
@@ -566,11 +919,18 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
             let now_interactive = on_island || on_bubble;
             if now_interactive != interactive {
                 interactive = now_interactive;
+                #[cfg(debug_assertions)]
+                if unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState(0x01) } < 0 {
+                    // Mouse button held while crossing the island = probably a drag.
+                    ui_log(format!("hit: interactive={interactive} (button held) at {lx:.0},{ly:.0}"));
+                }
                 let _ = win.set_ignore_cursor_events(!interactive);
             }
             // Only the island itself expands on hover; the bubble is a click target.
             if on_island != hovering {
                 hovering = on_island;
+                #[cfg(debug_assertions)]
+                ui_log(format!("hover: {hovering} at {lx:.0},{ly:.0}"));
                 let _ = app.emit("island://hover", hovering);
             }
         }
@@ -632,6 +992,7 @@ fn build_context_menu(app: &AppHandle, win: &WebviewWindow, s: &Settings) -> tau
         .item(&idle.build()?)
         .item(&theme.build()?)
         .item(&alpha.build()?)
+        .text("move", "Move Island…")
         .item(&display.build()?)
         .separator()
         .text("ai", if s.ai_hotkey.is_empty() { "Search or Ask".to_string() } else { format!("Search or Ask\t{}", s.ai_hotkey) })
@@ -658,6 +1019,10 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
             "hover" => json!({ "expandOnHover": !s.expand_on_hover }),
             "hide" => {
                 set_island_hidden(app, &state, true);
+                return;
+            }
+            "move" => {
+                start_move(app, true);
                 return;
             }
             "ai" => {
@@ -689,12 +1054,58 @@ fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     // Same frontend; it renders the settings page because the window label is "settings".
-    WebviewWindowBuilder::new(app, "settings", WebviewUrl::default())
+    // On Windows 11 the window gets the system Mica material behind a dark theme, like
+    // the built-in Settings app; older Windows gets a solid dark background.
+    let mica = windows_build() >= 22000;
+    let mut b = WebviewWindowBuilder::new(app, "settings", WebviewUrl::default())
         .title("Islander Settings")
-        .inner_size(480.0, 700.0)
-        .min_inner_size(420.0, 520.0)
-        .background_color(tauri::window::Color(0, 0, 0, 255))
-        .center()
-        .build()?;
+        .inner_size(880.0, 620.0)
+        .min_inner_size(720.0, 500.0)
+        .theme(Some(tauri::Theme::Dark))
+        .additional_browser_args(BROWSER_ARGS)
+        .center();
+    if mica {
+        b = b
+            .transparent(true)
+            .background_color(tauri::window::Color(0, 0, 0, 0))
+            .effects(tauri::utils::config::WindowEffectsConfig {
+                effects: vec![tauri::utils::WindowEffect::Mica],
+                ..Default::default()
+            })
+            .initialization_script("document.documentElement.setAttribute('data-mica','')");
+    } else {
+        b = b.background_color(tauri::window::Color(30, 30, 30, 255));
+    }
+    b.build()?;
     Ok(())
+}
+
+/// WebView2 switches shared by every window (they must match, or WebView2 refuses to
+/// create the second window). The first part is Tauri's default; then GPU rasterisation
+/// and zero-copy uploads for smooth animation, and no throttling when Windows thinks
+/// the always-on-top island is covered.
+pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --enable-gpu-rasterization --enable-zero-copy --disable-background-timer-throttling --disable-renderer-backgrounding";
+
+/// Windows build number (22000+ is Windows 11).
+fn windows_build() -> u32 {
+    use windows::core::w;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
+    let mut buf = [0u16; 32];
+    let mut len = (buf.len() * 2) as u32;
+    let ok = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            w!("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"),
+            w!("CurrentBuildNumber"),
+            RRF_RT_REG_SZ,
+            None,
+            Some(buf.as_mut_ptr().cast()),
+            Some(&mut len),
+        )
+    };
+    if ok.is_err() {
+        return 0;
+    }
+    let n = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    String::from_utf16_lossy(&buf[..n]).trim().parse().unwrap_or(0)
 }

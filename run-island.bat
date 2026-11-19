@@ -75,7 +75,9 @@ echo.
 echo Starting Islander. The FIRST start compiles everything and can take 3-8 minutes.
 echo Later starts take a few seconds. Close this window to quit Islander.
 echo.
-call npm run tauri dev
+rem Same as "npm run tauri dev", but also saves everything it prints to dev-output.log
+rem (so Claude can read build errors itself).
+call node scripts\dev-with-log.mjs
 if errorlevel 1 goto :fail
 exit /b
 

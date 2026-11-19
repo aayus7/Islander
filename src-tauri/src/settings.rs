@@ -48,6 +48,11 @@ pub struct Settings {
     // ---- modules & workspace ----
     /// Enabled tabs, in order.
     pub modules: Vec<String>,
+    /// Every tab this settings file has heard of, so tabs added in an update get
+    /// switched on once (next to their usual neighbour) without re-enabling ones
+    /// you turned off.
+    #[serde(default = "legacy_known")]
+    pub modules_known: Vec<String>,
     pub weather_city: String,
     /// "C" | "F"
     pub weather_unit: String,
@@ -59,16 +64,41 @@ pub struct Settings {
     pub notifications: bool,
     pub dnd: bool,
     pub hide_in_fullscreen: bool,
+    /// Show the island in Islander's own screen recordings (off = left out of the video).
+    pub show_in_recordings: bool,
     pub auto_hide: bool,
     pub frame_rate: u32,
     /// Replace Windows' own volume flyout and notification banners with the island's.
     pub takeover: bool,
+    /// Start Islander when you sign in to Windows.
+    pub launch_at_login: bool,
+    /// Which screen edge the island lives on: "top" | "bottom" | "left" | "right".
+    pub dock: String,
+    /// Where along that edge: "start" (left/top) | "center" | "end" (right/bottom).
+    pub dock_along: String,
+    /// The one-time "you can move the island" tip was shown.
+    pub move_tip_shown: bool,
+    /// Nearby sharing (LocalSend) in the Shelf: send to / receive from phones on this network.
+    pub nearby_sharing: bool,
+    /// The name other devices see ("" = this PC's name).
+    pub nearby_name: String,
+    /// Typeface: "inter" (bundled, default) | "system" (SF Pro if installed, else Segoe UI).
+    pub font: String,
+    /// Version of the AI model choice (bumped to move everyone to a new default once).
+    /// Missing in older files → 0.
+    #[serde(default)]
+    pub ai_model_v: u32,
 }
 
 /// Target refresh rate for live visuals (waveform events, glass capture), from settings.
 pub static FPS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(60);
 
-pub const ALL_MODULES: [&str; 9] = ["ai", "media", "today", "clock", "notes", "shelf", "clipboard", "stats", "controls"];
+pub const ALL_MODULES: [&str; 10] = ["ai", "media", "controls", "today", "weather", "clock", "notes", "shelf", "clipboard", "stats"];
+
+/// Tabs that existed before `modules_known` was tracked (older settings files).
+fn legacy_known() -> Vec<String> {
+    ["ai", "media", "controls", "today", "clock", "notes", "shelf", "clipboard", "stats"].iter().map(|s| s.to_string()).collect()
+}
 
 impl Default for Settings {
     fn default() -> Self {
@@ -87,11 +117,12 @@ impl Default for Settings {
             idle_style: "notch".into(),
             ai_hotkey: "Ctrl+Alt+Space".into(),
             ai_api_key: String::new(),
-            ai_model: "gemini-flash-lite-latest".into(),
+            ai_model: "gemini-3.5-flash-lite".into(),
             ai_relay_url: String::new(),
             ai_glass: true,
             device_id: String::new(),
             modules: ALL_MODULES.iter().map(|s| s.to_string()).collect(),
+            modules_known: ALL_MODULES.iter().map(|s| s.to_string()).collect(),
             weather_city: String::new(),
             weather_unit: "C".into(),
             clipboard_history: true,
@@ -100,9 +131,18 @@ impl Default for Settings {
             notifications: true,
             dnd: false,
             hide_in_fullscreen: true,
+            show_in_recordings: true,
             auto_hide: false,
             frame_rate: 60,
             takeover: true,
+            launch_at_login: true,
+            dock: "top".into(),
+            dock_along: "center".into(),
+            move_tip_shown: false,
+            font: "inter".into(),
+            nearby_sharing: true,
+            nearby_name: String::new(),
+            ai_model_v: 2,
         }
     }
 }
@@ -112,8 +152,27 @@ impl Settings {
         if self.device_id.len() < 16 {
             self.device_id = new_device_id();
         }
-        if self.ai_model.trim().is_empty() {
-            self.ai_model = "gemini-flash-lite-latest".into();
+        // Pin the "-latest" aliases and retired 2.x names to the previous-generation
+        // models: the newest one behind the alias is often out of free quota.
+        match self.ai_model.trim() {
+            "" | "gemini-flash-lite-latest" | "gemini-2.5-flash-lite" | "gemini-2.0-flash-lite" => self.ai_model = "gemini-3.5-flash-lite".into(),
+            "gemini-flash-latest" | "gemini-2.5-flash" | "gemini-2.0-flash" => self.ai_model = "gemini-3.6-flash".into(),
+            _ => {}
+        }
+        if !["top", "bottom", "left", "right"].contains(&self.dock.as_str()) {
+            self.dock = "top".into();
+        }
+        if !["inter", "system"].contains(&self.font.as_str()) {
+            self.font = "inter".into();
+        }
+        if !["start", "center", "end"].contains(&self.dock_along.as_str()) {
+            self.dock_along = "center".into();
+        }
+        // v2: Gemini 3.5 Flash-Lite with Google Search is the setup that works on the free
+        // tier (3.6 Flash's search quota is often 0), so move everyone to it once.
+        if self.ai_model_v < 2 {
+            self.ai_model = "gemini-3.5-flash-lite".into();
+            self.ai_model_v = 2;
         }
         self.anim_speed = self.anim_speed.clamp(0.25, 2.0);
         self.size_scale = self.size_scale.clamp(0.7, 1.6);
@@ -128,6 +187,17 @@ impl Settings {
         }
         let mut seen = std::collections::HashSet::new();
         self.modules.retain(|m| ALL_MODULES.contains(&m.as_str()) && seen.insert(m.clone()));
+        // New tabs from an update: add each after its usual neighbour, once.
+        for (i, id) in ALL_MODULES.iter().enumerate() {
+            if self.modules_known.iter().any(|k| k == id) {
+                continue;
+            }
+            if !self.modules.iter().any(|m| m == id) {
+                let after = ALL_MODULES[..i].iter().rev().find_map(|p| self.modules.iter().position(|m| m == p));
+                self.modules.insert(after.map(|p| p + 1).unwrap_or(0), id.to_string());
+            }
+        }
+        self.modules_known = ALL_MODULES.iter().map(|s| s.to_string()).collect();
         if self.modules.is_empty() {
             self.modules = vec!["ai".into(), "media".into()];
         }

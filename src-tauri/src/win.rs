@@ -41,61 +41,108 @@ pub fn set_activatable(win: &tauri::WebviewWindow, activatable: bool) {
     }
 }
 
-/// Hide the island from screen captures (so the glass effect can see what's *behind* it).
-pub fn set_capture_excluded(win: &tauri::WebviewWindow, excluded: bool) {
+/// Why the island is hidden from screen captures (several features can ask at once).
+pub const CAPTURE_GLASS: u8 = 1;
+pub const CAPTURE_RECORDING: u8 = 2;
+static CAPTURE_REASONS: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Hide the island from screen captures while any reason asks for it.
+pub fn exclude_from_capture(win: &tauri::WebviewWindow, reason: u8, on: bool) {
+    use std::sync::atomic::Ordering;
     use windows::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE};
+    let before = if on { CAPTURE_REASONS.fetch_or(reason, Ordering::SeqCst) } else { CAPTURE_REASONS.fetch_and(!reason, Ordering::SeqCst) };
+    let mask = if on { before | reason } else { before & !reason };
+    // Changing the display affinity makes Windows redraw the window (a visible blink),
+    // so only touch it when the island actually switches between shown and hidden.
+    if (before != 0) == (mask != 0) {
+        return;
+    }
     let Ok(h) = win.hwnd() else { return };
     unsafe {
-        let _ = SetWindowDisplayAffinity(HWND(h.0 as _), if excluded { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE });
+        let _ = SetWindowDisplayAffinity(HWND(h.0 as _), if mask != 0 { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE });
     }
+}
+
+/// The glass effect's reason (see glass.rs).
+pub fn set_capture_excluded(win: &tauri::WebviewWindow, excluded: bool) {
+    exclude_from_capture(win, CAPTURE_GLASS, excluded);
 }
 
 /// True when the app in front covers the whole monitor the island is on (a game,
 /// a fullscreen video, a presentation) — the island gets out of the way then.
 pub fn fullscreen_in_front(win: &tauri::WebviewWindow) -> bool {
+    let (yes, why) = fs_check(win);
+    *FS_WHY.lock().unwrap() = why;
+    yes
+}
+
+/// Why the last fullscreen check decided what it did (for the log).
+static FS_WHY: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+pub fn fullscreen_why() -> String {
+    FS_WHY.lock().unwrap().clone()
+}
+
+fn fs_check(win: &tauri::WebviewWindow) -> (bool, String) {
     use windows::Win32::Foundation::RECT;
     use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
     use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetForegroundWindow, GetWindowRect, IsZoomed};
-    let Ok(h) = win.hwnd() else { return false };
+    let Ok(h) = win.hwnd() else { return (false, "no island window".into()) };
     let island = HWND(h.0 as _);
     unsafe {
         let fg = GetForegroundWindow();
         if fg.0.is_null() || fg == island {
-            return false;
+            return (false, if fg.0.is_null() { "no foreground window".into() } else { "the island itself is in front".into() });
+        }
+        // Our own windows (Settings, the drop-zone layer while moving) never count.
+        let mut pid = 0u32;
+        windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(fg, Some(&mut pid as *mut u32));
+        if pid == std::process::id() {
+            return (false, "one of Islander's own windows is in front".into());
         }
         // The desktop and taskbar are "fullscreen" windows too — ignore them.
         let mut cls = [0u16; 64];
         let n = GetClassNameW(fg, &mut cls).max(0) as usize;
         let class = String::from_utf16_lossy(&cls[..n]);
         if matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd" | "Windows.UI.Core.CoreWindow" | "XamlExplorerHostIslandWindow") {
-            return false;
+            return (false, format!("shell window in front ({class})"));
         }
-        // A maximized window (Explorer, a browser…) is not "fullscreen", even when an
-        // auto-hiding taskbar lets it cover the whole screen.
-        if IsZoomed(fg).as_bool() {
-            return false;
-        }
+        let zoomed = IsZoomed(fg).as_bool();
         let mon = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
         if mon != MonitorFromWindow(island, MONITOR_DEFAULTTONEAREST) {
-            return false;
+            return (false, format!("{class} is on another monitor"));
         }
         let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         if !GetMonitorInfoW(mon, &mut info).as_bool() {
-            return false;
+            return (false, "no monitor info".into());
         }
         let mut r = RECT::default();
         if GetWindowRect(fg, &mut r).is_err() {
-            return false;
+            return (false, "no window rect".into());
         }
         // True fullscreen (games, F11, video players) sits exactly on the monitor.
         let m = info.rcMonitor;
-        (r.left - m.left).abs() <= 1 && (r.top - m.top).abs() <= 1 && (r.right - m.right).abs() <= 1 && (r.bottom - m.bottom).abs() <= 1
+        let covers = (r.left - m.left).abs() <= 1 && (r.top - m.top).abs() <= 1 && (r.right - m.right).abs() <= 1 && (r.bottom - m.bottom).abs() <= 1;
+        let desc = format!(
+            "{class} rect {},{},{},{} monitor {},{},{},{} work {},{},{},{} maximized {zoomed}",
+            r.left, r.top, r.right, r.bottom, m.left, m.top, m.right, m.bottom, info.rcWork.left, info.rcWork.top, info.rcWork.right, info.rcWork.bottom
+        );
+        if !covers {
+            return (false, desc);
+        }
+        // Browsers keep a maximized window flagged "maximized" when a video goes fullscreen
+        // (Firefox does this), so "maximized" alone doesn't rule it out. What does: a normal
+        // maximized window never covers the taskbar. Only when the taskbar auto-hides (work
+        // area = whole monitor) is a maximized window ambiguous; then it isn't fullscreen.
+        let w = info.rcWork;
+        let taskbar_visible = w.left != m.left || w.top != m.top || w.right != m.right || w.bottom != m.bottom;
+        (!zoomed || taskbar_visible, desc)
     }
 }
 
 /// The island is a single overlay: if an older copy is still running (e.g. a dev
 /// restart that didn't shut it down), close it so there's one island and the
 /// hotkeys are free.
+#[allow(dead_code)] // development builds only
 pub fn close_other_instances() {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
@@ -169,5 +216,54 @@ pub fn focus_app(stem: &str) -> bool {
     match path {
         Some(p) => crate::system::open(&p, "open").is_ok(),
         None => false,
+    }
+}
+
+/// Debug: which of the island's windows accept OLE drops (have a registered
+/// IDropTarget), plus their extended styles. Written to island-debug.log.
+#[cfg(debug_assertions)]
+pub fn probe_drop_targets(win: &tauri::WebviewWindow) -> String {
+    use windows::core::w;
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::LPARAM;
+    use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetClassNameW, GetPropW};
+    let Ok(h) = win.hwnd() else { return "no hwnd".into() };
+    let root = HWND(h.0 as _);
+    let mut out = Vec::<String>::new();
+    let describe = |hw: HWND| unsafe {
+        let mut buf = [0u16; 128];
+        let n = GetClassNameW(hw, &mut buf);
+        let class = String::from_utf16_lossy(&buf[..n.max(0) as usize]);
+        let target = !GetPropW(hw, w!("OleDropTargetInterface")).is_invalid();
+        let ex = GetWindowLongPtrW(hw, GWL_EXSTYLE);
+        format!("{class} droptarget={target} exstyle={ex:#x}")
+    };
+    out.push(format!("root: {}", describe(root)));
+    unsafe extern "system" fn each(hw: HWND, l: LPARAM) -> BOOL {
+        let v = &mut *(l.0 as *mut Vec<HWND>);
+        v.push(hw);
+        BOOL(1)
+    }
+    let mut kids: Vec<HWND> = Vec::new();
+    unsafe {
+        let _ = EnumChildWindows(Some(root), Some(each), LPARAM(&mut kids as *mut _ as isize));
+    }
+    for k in kids {
+        out.push(format!("child: {}", describe(k)));
+    }
+    out.join(" | ")
+}
+
+/// Put `top` above every other always-on-top window, and `below` right under it
+/// (the island over its own drop-zone layer). Never takes focus.
+pub fn stack_above(top: &tauri::WebviewWindow, below: Option<&tauri::WebviewWindow>) {
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+    let Ok(t) = top.hwnd() else { return };
+    let t = HWND(t.0 as _);
+    unsafe {
+        let _ = SetWindowPos(t, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if let Some(Ok(b)) = below.map(|b| b.hwnd()) {
+            let _ = SetWindowPos(HWND(b.0 as _), Some(t), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
     }
 }

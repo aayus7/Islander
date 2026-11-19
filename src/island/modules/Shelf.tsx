@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { bridge, isTauri } from "../../bridge";
 import { call, on, send } from "../../lib/native";
 import { Empty, Glyph, IconButton, ModHeader } from "./ui";
+import { useSettings } from "../../lib/settings";
+import { sendTo, useNearby, useNearbyScan, type Peer } from "../../lib/nearby";
+import { DeviceGlyph, NearbyRow } from "./Nearby";
 import { startDragOut } from "./drag";
 
 export interface ShelfItem {
@@ -56,47 +59,44 @@ export function useShelfDrop(onEnter: () => void) {
   const [over, setOver] = useState(false);
   useEffect(() => {
     if (!isTauri) return;
-    let un: (() => void) | undefined;
-    let alive = true;
-    import("@tauri-apps/api/webview").then(({ getCurrentWebview }) => {
-      getCurrentWebview()
-        .onDragDropEvent((e) => {
-          const p = e.payload;
-          if (p.type !== "over") bridge.log(`shelf drag ${p.type}${"paths" in p ? ` (${p.paths.length} item(s))` : ""}`);
-          if (p.type === "enter") {
-            setOver(true);
-            onEnter();
-          } else if (p.type === "leave") {
-            setOver(false);
-          } else if (p.type === "drop") {
-            setOver(false);
-            if (p.paths.length) {
-              // The Controls tab turns drops into launcher pins; everywhere else they go to the shelf.
-              const handled = !window.dispatchEvent(new CustomEvent("island:drop", { detail: p.paths, cancelable: true }));
-              if (!handled) send("shelf_add", { paths: p.paths });
-            }
-          }
-        })
-        .then((u) => (alive ? (un = u) : u()));
-    });
-    return () => {
-      alive = false;
-      un?.();
-    };
+    // Islander's own native drop handler (see dropin.rs). Re-attached on every page
+    // load, since the WebView can re-register its own one.
+    send("drop_attach");
+    const offs = [
+      on<string[]>("drop://enter", (paths) => {
+        bridge.log(`shelf drag enter (${paths.length} item(s))`);
+        setOver(true);
+        onEnter();
+      }),
+      on("drop://leave", () => setOver(false)),
+      on<string[]>("drop://drop", (paths) => {
+        setOver(false);
+        if (!paths.length) return;
+        // The Controls tab's Pinned page turns drops into launcher pins; everywhere else they go to the shelf.
+        const handled = !window.dispatchEvent(new CustomEvent("island:drop", { detail: paths, cancelable: true }));
+        if (!handled) send("shelf_add", { paths });
+      }),
+    ];
+    return () => offs.forEach((off) => off());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return over;
 }
 
-export function ShelfPanel({ width, height, dragging }: { width: number; height: number; dragging: boolean }) {
+export function ShelfPanel({ width, height, dragging, scan = true }: { width: number; height: number; dragging: boolean; scan?: boolean }) {
   const items = useShelf();
+  const { settings } = useSettings();
+  const nearbyOn = settings.nearbySharing !== false;
+  const { peers, byPeer, blocked } = useNearby();
+  useNearbyScan(nearbyOn && scan);
   const [actionsFor, setActionsFor] = useState<string | null>(null);
+  const [sendFor, setSendFor] = useState<Peer | null>(null);
   const target = items.find((i) => i.id === actionsFor) ?? null;
   const [elevated, setElevated] = useState(false);
   useEffect(() => {
     call<boolean>("shelf_elevated", undefined, false).then(setElevated).catch(() => {});
   }, []);
   return (
-    <div className="mod" style={{ width, height }}>
+    <div className="mod shelf-mod" style={{ width, height }}>
       <ModHeader title="Shelf">
         {items.length > 0 && (
           <IconButton title="Clear shelf" onClick={() => send("shelf_clear")}>
@@ -134,8 +134,22 @@ export function ShelfPanel({ width, height, dragging }: { width: number; height:
             </AnimatePresence>
           </div>
         )}
-        <AnimatePresence>{target && <ActionSheet it={target} onClose={() => setActionsFor(null)} />}</AnimatePresence>
       </div>
+      {nearbyOn && (
+        <NearbyRow
+          peers={peers}
+          byPeer={byPeer}
+          items={items}
+          blocked={blocked}
+          onPick={(p) => {
+            setActionsFor(null);
+            setSendFor(p);
+          }}
+        />
+      )}
+      <AnimatePresence>{sendFor && <SendSheet peer={sendFor} items={items} onClose={() => setSendFor(null)} />}</AnimatePresence>
+      {/* Covers everything under the title, the device row too, so every action fits. */}
+      <AnimatePresence>{target && <ActionSheet it={target} peers={nearbyOn ? peers : []} onClose={() => setActionsFor(null)} />}</AnimatePresence>
     </div>
   );
 }
@@ -144,7 +158,7 @@ export function ShelfPanel({ width, height, dragging }: { width: number; height:
  * Actions for one shelf item, as a sheet that covers the shelf (it can't be cut off by
  * the scrolling row or the island's edge): the file up top, then rounded action buttons.
  */
-export function ActionSheet({ it, onClose }: { it: ShelfItem; onClose(): void }) {
+export function ActionSheet({ it, onClose, peers = [] }: { it: ShelfItem; onClose(): void; peers?: Peer[] }) {
   const isImg = it.kind === "image";
   const act = (cmd: string, args: Record<string, unknown> = {}) => {
     send(cmd, { id: it.id, ...args });
@@ -175,6 +189,21 @@ export function ActionSheet({ it, onClose }: { it: ShelfItem; onClose(): void })
           <Glyph.x size={10} />
         </button>
       </div>
+      {it.kind !== "folder" && peers.length > 0 && (
+        <div className="sheet-send">
+          {peers.map((p) => (
+            <SheetButton
+              key={p.fingerprint}
+              label={`Send to ${p.alias}`}
+              tone="send"
+              onClick={() => {
+                void sendTo(p, [it.path]);
+                onClose();
+              }}
+            />
+          ))}
+        </div>
+      )}
       <div className="sheet-actions">
         <SheetButton label="Open" onClick={() => act("shelf_open")} />
         <SheetButton label="Show in Explorer" onClick={() => act("shelf_reveal")} />
@@ -187,10 +216,98 @@ export function ActionSheet({ it, onClose }: { it: ShelfItem; onClose(): void })
   );
 }
 
-function SheetButton({ label, onClick, danger }: { label: string; onClick(): void; danger?: boolean }) {
+/**
+ * "Send to aayus's iPhone": shows exactly what will go before anything is sent, AirDrop
+ * style. Every file starts selected; tap one to leave it out. Folders can't be sent.
+ */
+function SendSheet({ peer, items, onClose }: { peer: Peer; items: ShelfItem[]; onClose(): void }) {
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const files = items.filter((i) => i.kind !== "folder");
+  const chosen = files.filter((i) => !off.has(i.id));
+  const label = chosen.length === 0 ? "Choose files to send" : chosen.length === 1 ? "Send 1 file" : `Send ${chosen.length} files`;
+  return (
+    <motion.div
+      className="sheet send-sheet"
+      initial={{ opacity: 0, y: 14, scale: 0.97, filter: "blur(6px)" }}
+      animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+      exit={{ opacity: 0, y: 10, scale: 0.98, filter: "blur(4px)", transition: { duration: 0.14 } }}
+      transition={{ type: "spring", stiffness: 420, damping: 34, opacity: { duration: 0.18 } }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="sheet-head">
+        <div className="sheet-thumb send-avatar">
+          <DeviceGlyph type={peer.deviceType} size={18} />
+        </div>
+        <span className="sheet-name">Send to {peer.alias}</span>
+        <button
+          className="sheet-close"
+          title="Cancel"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+        >
+          <Glyph.x size={10} />
+        </button>
+      </div>
+      <div className="send-strip">
+        {items.map((it) => {
+          const folder = it.kind === "folder";
+          const on = !folder && !off.has(it.id);
+          return (
+            <button
+              key={it.id}
+              className={`send-pick ${on ? "on" : ""} ${folder ? "folder" : ""}`}
+              title={folder ? "Folders can't be sent. Zip it first." : on ? "Leave this out" : "Include this"}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (folder) return;
+                setOff((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(it.id)) next.delete(it.id);
+                  else next.add(it.id);
+                  return next;
+                });
+              }}
+            >
+              <span className={`send-pick-thumb ${it.kind === "image" ? "img" : ""}`}>
+                {it.thumb ? <img src={it.thumb} alt="" draggable={false} /> : folder ? <span style={{ color: "#64d2ff" }}><Glyph.folder size={26} /></span> : <FileBadge ext={it.ext} />}
+                {!folder && (
+                  <span className="send-check">
+                    {on && (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12.5l4.5 4.5L19 7.5" />
+                      </svg>
+                    )}
+                  </span>
+                )}
+              </span>
+              <span className="send-pick-name">{it.name}</span>
+            </button>
+          );
+        })}
+      </div>
+      <motion.button
+        className="send-go"
+        disabled={chosen.length === 0}
+        whileTap={chosen.length ? { scale: 0.97 } : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!chosen.length) return;
+          void sendTo(peer, chosen.map((c) => c.path));
+          onClose();
+        }}
+      >
+        {label}
+      </motion.button>
+    </motion.div>
+  );
+}
+
+function SheetButton({ label, onClick, danger, tone }: { label: string; onClick(): void; danger?: boolean; tone?: "send" }) {
   return (
     <motion.button
-      className={`sheet-btn ${danger ? "danger" : ""}`}
+      className={`sheet-btn ${danger ? "danger" : ""} ${tone ?? ""}`}
       whileTap={{ scale: 0.94 }}
       onClick={(e) => {
         e.stopPropagation();
@@ -212,7 +329,7 @@ function ShelfTile({ it, onMore }: { it: ShelfItem; onMore(): void }) {
       animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
       exit={{ opacity: 0, scale: 0.6, filter: "blur(6px)", transition: { duration: 0.18 } }}
       transition={{ type: "spring", stiffness: 380, damping: 28 }}
-      onPointerDown={(e) => startDragOut(e, { files: [it.path] })}
+      data-no-lift="" onPointerDown={(e) => startDragOut(e, { files: [it.path] })}
       onDoubleClick={() => send("shelf_open", { id: it.id })}
       title={it.path}
     >
@@ -262,7 +379,7 @@ export function FileBadge({ ext }: { ext: string }) {
       <path d="M4 0h18l12 12v26a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4z" fill="#f2f2f7" />
       <path d="M22 0l12 12h-8a4 4 0 0 1-4-4z" fill="#c7c7cc" />
       <rect x="4" y="26" width="26" height="11" rx="3" fill={`hsl(${hue}, 70%, 52%)`} />
-      <text x="17" y="34.2" textAnchor="middle" fontSize="7.4" fontWeight="700" fill="#fff" fontFamily="-apple-system, Inter, Segoe UI, sans-serif">
+      <text x="17" y="34.2" textAnchor="middle" fontSize="7.4" fontWeight="700" fill="#fff" fontFamily="var(--font)">
         {(ext || "FILE").slice(0, 4).toUpperCase()}
       </text>
     </svg>

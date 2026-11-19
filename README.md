@@ -186,7 +186,7 @@ Islander is free software: you can redistribute it and/or modify it under the te
 **GNU General Public License v3.0 or later** (see [`LICENSE`](LICENSE)). Anyone who shares a modified
 version must share its source under the same license.
 
-Download the installer from [Releases](https://github.com/aayus7/islander-releases/releases/latest).
+Download the installer from [Releases](https://github.com/aayus7/Islander/releases/latest).
 
 ## Credits & licences
 - **AirPods & Beats animations**: [AirPodsDesktop](https://github.com/SpriteOvO/AirPodsDesktop) by

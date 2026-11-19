@@ -43,7 +43,9 @@ const json = (status: number, body: unknown) =>
 
 type Part = { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: unknown };
 type Content = { role: string; parts: Part[] };
-type Source = { uri: string; title: string };
+/** A source as found: `text` (its snippet) is only used to judge relevance and is never sent;
+ * `pin` marks live-data sources (prices, scores) that are relevant whenever they were used. */
+type Source = { uri: string; title: string; text?: string; pin?: boolean };
 
 /* ------------------------------------------------------------------ tools */
 
@@ -163,6 +165,48 @@ const host = (u: string) => {
  *   - DuckDuckGo instant answers
  * Everything is labelled with its date where one exists, so the model can tell old from new.
  */
+/* --------------------------------------------------------- source ranking */
+
+const RANK_STOP = new Set(
+  "the a an and or of to in on for at by with from as is are was were be been it its this that these those who what when where which why how does did do has have had he she they his her their him them you your i me my we our not no yes about into over after before than then there here also just only more most some any can could would should will may might one two new now today latest current currently".split(" "),
+);
+function tokens(t: string): Set<string> {
+  const x = t
+    .toLowerCase()
+    .replace(/\bpm\b/g, "prime minister")
+    .replace(/\bpotus\b/g, "president united states")
+    .replace(/\bf1\b/g, "formula 1");
+  return new Set(x.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2 && !RANK_STOP.has(w)));
+}
+/**
+ * The sources worth showing under an answer, best first: ones whose title or snippet shares
+ * words with the answer (and the question). A search hit that only shares a stray word ("Prime
+ * Video" for "who is the PM…") is dropped: better no source than a wrong one.
+ */
+function rankSources(sources: Source[], question: string, answer: string, max = 3): { uri: string; title: string }[] {
+  const a = tokens(answer);
+  const q = tokens(question);
+  const seen = new Set<string>();
+  return sources
+    .filter((s) => s.uri && !seen.has(s.uri) && seen.add(s.uri))
+    .map((s, i) => {
+      if (s.pin) return { s, score: 100 - i };
+      const st = tokens(`${s.title} ${s.text ?? ""}`);
+      let inA = 0;
+      let inQ = 0;
+      for (const w of st) {
+        if (a.has(w)) inA++;
+        if (q.has(w)) inQ++;
+      }
+      const ok = inA >= 2 && inQ >= 1;
+      return { s, score: ok ? inA * 2 + inQ - i * 0.01 : -1 };
+    })
+    .filter((x) => x.score > 0)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, max)
+    .map(({ s }) => ({ uri: s.uri, title: s.title }));
+}
+
 async function webSearch(query: string, sources: Source[]): Promise<string> {
   const q = encodeURIComponent(query.slice(0, 200));
   // Search engines read questions literally ("who won…" → the Korean currency), so the
@@ -177,7 +221,7 @@ async function webSearch(query: string, sources: Source[]): Promise<string> {
       .flatMap((r) => (r.status === "fulfilled" ? r.value.slice(0, 5) : []))
       .filter((i) => i.link && !seen.has(i.link) && seen.add(i.link) && !/dictionary|merriam-webster|thefreedictionary|vocabulary\.com|wiktionary/i.test(i.link))
       .slice(0, 7);
-    items.slice(0, 3).forEach((i) => sources.push({ uri: i.link, title: i.title || host(i.link) }));
+    items.slice(0, 3).forEach((i) => sources.push({ uri: i.link, title: i.title || host(i.link), text: i.desc }));
     return items.length ? "Web results:\n" + items.map((i) => `- ${i.title} (${host(i.link)}${i.date ? ", " + shortDate(i.date) : ""}): ${i.desc.slice(0, 320)}`).join("\n") : "";
   })();
   const nq = encodeURIComponent(kw || query);
@@ -196,7 +240,7 @@ async function webSearch(query: string, sources: Source[]): Promise<string> {
       seen.add(k);
       return true;
     }).slice(0, 7);
-    items.slice(0, 2).forEach((i) => i.link && sources.push({ uri: i.link, title: i.source || host(i.link) || i.title }));
+    items.slice(0, 2).forEach((i) => i.link && sources.push({ uri: i.link, title: i.source || host(i.link) || i.title, text: `${i.title} ${i.desc}` }));
     return items.length ? "News, newest first:\n" + items.map((i) => `- ${shortDate(i.date) || "undated"}: ${i.title}${i.desc ? " — " + i.desc.slice(0, 220) : ""}`).join("\n") : "";
   })();
   const wiki = (async () => {
@@ -210,7 +254,7 @@ async function webSearch(query: string, sources: Source[]): Promise<string> {
     return pages
       .filter((p) => p.extract)
       .map((p) => {
-        if (p.fullurl) sources.push({ uri: p.fullurl, title: `Wikipedia: ${p.title}` });
+        if (p.fullurl) sources.push({ uri: p.fullurl, title: `Wikipedia: ${p.title}`, text: String(p.extract).slice(0, 600) });
         return `Wikipedia — ${p.title} (edited ${String(p.touched ?? "").slice(0, 10)}):\n${p.extract}`;
       })
       .join("\n\n");
@@ -218,7 +262,7 @@ async function webSearch(query: string, sources: Source[]): Promise<string> {
   const ddg = (async () => {
     const d = await getJson(`https://api.duckduckgo.com/?q=${q}&format=json&no_html=1&skip_disambig=1`);
     const bits = [d?.Answer, d?.AbstractText].filter(Boolean);
-    if (d?.AbstractURL && d?.AbstractText) sources.push({ uri: d.AbstractURL, title: d.AbstractSource || "DuckDuckGo" });
+    if (d?.AbstractURL && d?.AbstractText) sources.push({ uri: d.AbstractURL, title: d.AbstractSource || "DuckDuckGo", text: d.AbstractText });
     return bits.length ? `Quick facts: ${bits.join(" ")}` : "";
   })();
   const rs = await Promise.allSettled([web, news, wiki, ddg]);
@@ -243,7 +287,7 @@ async function cryptoPrice(id: string, sources: Source[]): Promise<string> {
     const got = await Promise.allSettled(["USD", "CAD", "EUR", "INR"].map((cur) => getJson(`https://api.coinbase.com/v2/prices/${sym}-${cur}/spot`).then((d) => [cur, Number(d?.data?.amount)] as const)));
     const px = got.flatMap((g) => (g.status === "fulfilled" && Number.isFinite(g.value[1]) ? [g.value] : []));
     if (px.length) {
-      sources.push({ uri: `https://www.coinbase.com/price/${id}`, title: "Coinbase" });
+      sources.push({ uri: `https://www.coinbase.com/price/${id}`, title: "Coinbase", pin: true });
       const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n < 10 ? 4 : 2 });
       return `Live ${id} price right now (Coinbase spot): ${px.map(([c, n]) => `${fmt(n)} ${c}`).join(", ")}.`;
     }
@@ -251,7 +295,7 @@ async function cryptoPrice(id: string, sources: Source[]): Promise<string> {
   const d = await getJson(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd,cad,eur,inr&include_24hr_change=true&include_last_updated_at=true`);
   const p = d?.[id];
   if (!p?.usd) return "";
-  sources.push({ uri: `https://www.coingecko.com/en/coins/${id}`, title: "CoinGecko" });
+  sources.push({ uri: `https://www.coingecko.com/en/coins/${id}`, title: "CoinGecko", pin: true });
   const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n < 10 ? 4 : 2 });
   return `Live ${id} price (CoinGecko): $${fmt(p.usd)} USD, C$${fmt(p.cad)} CAD, €${fmt(p.eur)} EUR, ₹${fmt(p.inr)} INR; 24h change ${Number(p.usd_24h_change ?? 0).toFixed(2)}%.`;
 }
@@ -276,7 +320,7 @@ async function tavily(env: Env, query: string, sources: Source[]): Promise<strin
   if (!r.ok) throw new Error(`tavily ${r.status}`);
   const j: any = await r.json();
   const res = (j?.results ?? []) as { title: string; url: string; content: string; published_date?: string }[];
-  res.slice(0, 4).forEach((x) => sources.push({ uri: x.url, title: x.title || host(x.url) }));
+  res.slice(0, 4).forEach((x) => sources.push({ uri: x.url, title: x.title || host(x.url), text: String(x.content).slice(0, 600) }));
   const lines = res.map((x) => `- ${x.title} (${host(x.url)}${x.published_date ? ", " + shortDate(x.published_date) : ""}): ${String(x.content).slice(0, 500)}`);
   return [j?.answer ? `Search summary: ${j.answer}` : "", lines.length ? "Top results:\n" + lines.join("\n") : ""].filter(Boolean).join("\n");
 }
@@ -326,7 +370,7 @@ async function sportsScores(league: string, sources: Source[]): Promise<string> 
       /* skip */
     }
   }
-  sources.push({ uri: `https://www.espn.com/${path.split("/")[1]}/scoreboard`, title: "ESPN scoreboard" });
+  sources.push({ uri: `https://www.espn.com/${path.split("/")[1]}/scoreboard`, title: "ESPN scoreboard", pin: true });
   return out.join("\n\n") || "Scores unavailable right now.";
 }
 
@@ -589,9 +633,7 @@ export default {
         }
         const found = await foundP;
 
-        const uniq = [...new Map(sources.map((s) => [s.uri, s])).values()].slice(0, 6);
         if (dbg) await w.write(enc.encode(sse({ debug: { today, query, found, why } })));
-        if (found) await w.write(enc.encode(sse({ candidates: [{ groundingMetadata: { webSearchQueries: [query], groundingChunks: uniq.map((s) => ({ web: s })) } }] })));
 
         const last = contents[contents.length - 1];
         const asked: Content[] = found
@@ -685,6 +727,11 @@ export default {
         }
         if (why.length) console.log(`answered with ${used} after:`, why.join(" | "));
         if (dbg) await w.write(enc.encode(sse({ debug: { used, why } })));
+        // Sources are chosen once the answer exists, so only ones that back it are shown.
+        if (found) {
+          const shown = rankSources(sources, query, text);
+          await w.write(enc.encode(sse({ candidates: [{ groundingMetadata: { webSearchQueries: [query], groundingChunks: shown.map((s) => ({ web: s })) } }] })));
+        }
         await w.write(enc.encode(sse({ candidates: [{ content: { parts: [{ text }], role: "model" } }], modelVersion: used })));
       } catch (e) {
         await fail("The assistant took too long. Try again.").catch(() => {});

@@ -11,6 +11,7 @@
   <a href="https://github.com/aayus7/Islander/releases/latest"><img src="https://img.shields.io/github/v/release/aayus7/Islander?label=Download&style=for-the-badge&color=0a84ff" alt="Download"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-1c1c1e?style=for-the-badge" alt="Windows 10 and 11">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-1c1c1e?style=for-the-badge" alt="GPL-3.0"></a>
+  <a href="https://ko-fi.com/aayus7"><img src="https://img.shields.io/badge/Ko--fi-Support%20Islander-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support Islander on Ko-fi"></a>
 </p>
 
 <p align="center">
@@ -23,7 +24,7 @@ transition (expanding, splitting, the album cover turning on a skip) is rebuilt 
 match the iPhone. It runs quietly as a transparent overlay, never steals focus, and gets out of the
 way for fullscreen games and video.
 
-<p align="center"><a href="https://github.com/aayus7/Islander/releases/latest"><b>Download Islander</b></a> · free and open source</p>
+<p align="center"><a href="https://github.com/aayus7/Islander/releases/latest"><b>Download Islander</b></a> · free and open source · <a href="https://ko-fi.com/aayus7">support it on Ko-fi</a></p>
 
 ---
 
@@ -38,6 +39,14 @@ Skip a track and the cover turns around its axis, blurs and lands sharp, just li
 as a pill, it keeps the art in view with a soft glow in the album's own colour, and it turns there too.
 
 <p align="center"><img src="docs/media/music-compact.webp" alt="The collapsed music pill with the cover flip and glow" width="640"></p>
+
+## Ask anything
+
+Press `Ctrl+Alt+Space` and the island becomes a Siri-style search bar. Type or speak a question and
+it thinks in a glowing circle, then answers in a sentence or two with its source, using live web,
+news and sports results. Free out of the box, no API key needed.
+
+<p align="center"><img src="docs/media/ai.webp" alt="Asking the island a question and getting an answer" width="880"></p>
 
 ## Share with your phone, AirDrop-style
 
@@ -282,6 +291,13 @@ capture for liquid glass is used live and never saved. The microphone is only on
 ## Fonts
 Islander ships with **Inter** and uses it by default. SF Pro can't be bundled (Apple's licence limits it
 to Apple platforms); people who installed it themselves can pick **System** in Settings → Appearance.
+
+## Support Islander
+
+Islander is free and always will be. If it made your desktop a little nicer, you can buy me a coffee
+on [Ko-fi](https://ko-fi.com/aayus7). Every coffee helps keep Islander going.
+
+<a href="https://ko-fi.com/aayus7"><img src="https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Buy me a coffee on Ko-fi"></a>
 
 ## License
 Islander is free software: you can redistribute it and/or modify it under the terms of the

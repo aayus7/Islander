@@ -186,6 +186,9 @@ Islander is free software: you can redistribute it and/or modify it under the te
 **GNU General Public License v3.0 or later** (see [`LICENSE`](LICENSE)). Anyone who shares a modified
 version must share its source under the same license.
 
+**Name and logo:** the GPL covers the code, not the Islander name or logo. Forks are welcome, but
+please give them a different name and icon so nobody mistakes them for the official Islander.
+
 Download the installer from [Releases](https://github.com/aayus7/Islander/releases/latest).
 
 ## Credits & licences

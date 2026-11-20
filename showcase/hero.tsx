@@ -182,11 +182,22 @@ function next() {
   setTimeout(go, wait);
 }
 await import("../src/main");
-// Tell the website once the island is really there (drawn, fonts in) so it can reveal the page.
+// Images the cycle shows (the Discord avatar, the shared photos): fetched and decoded up front,
+// so they're on screen the moment their activity appears instead of popping in a beat later.
+const preloaded = Promise.all(
+  [M + "av-maya.png", ...photos.map((p) => p.preview)].map((src) => {
+    const img = new Image();
+    img.src = src;
+    return img.decode().catch(() => {});
+  }),
+);
+
+// Tell the website once the island is really there (drawn, fonts in, images ready) so it can reveal the page.
 (async () => {
   await document.fonts.ready;
+  await preloaded;
   while (!document.querySelector(".island svg path")) await new Promise((r) => requestAnimationFrame(r));
   requestAnimationFrame(() => requestAnimationFrame(() => parent.postMessage({ island: true, ready: true }, "*")));
 })();
 // island.html?still: no cycle (for testing)
-if (!location.search.includes("still")) next();
+if (!location.search.includes("still")) preloaded.then(next);

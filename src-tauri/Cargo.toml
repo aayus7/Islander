@@ -38,6 +38,7 @@ windows-future = "0.2" # async WinRT types (IAsyncOperation) the windows crate r
 windows = { version = "0.61", features = [
   "ApplicationModel",
   "Devices_Enumeration",
+  "Devices_Geolocation",
   "UI_Notifications",
   "UI_Notifications_Management",
   "Foundation",

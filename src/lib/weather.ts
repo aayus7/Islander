@@ -1,7 +1,11 @@
 // Weather glance: Open-Meteo (free, no API key). Location comes from the city set in
-// Settings, or an approximate IP lookup when none is set. Cached for 20 minutes.
+// Settings; otherwise from Windows' location service (Wi-Fi based, right to the town),
+// and only if that's off from an IP lookup, which can land on the internet provider's
+// city instead (Kathmandu for Hetauda). Cached for 20 minutes.
 import { useEffect } from "react";
 import { persistent, useStore } from "./persist";
+import { isTauri } from "../bridge";
+import { call } from "./native";
 
 export interface Weather {
   city: string;
@@ -56,9 +60,22 @@ async function locate(city: string): Promise<{ lat: number; lon: number; name: s
     if (!g) throw new Error(`Couldn't find “${city}”`);
     return { lat: g.latitude, lon: g.longitude, name: g.name };
   }
+  const pos = isTauri ? await call<{ lat: number; lon: number } | null>("geo_position").catch(() => null) : null;
+  if (pos) return { lat: pos.lat, lon: pos.lon, name: await placeName(pos.lat, pos.lon) };
   const r = await fetch("https://get.geojs.io/v1/ip/geo.json");
   const j = await r.json();
   return { lat: parseFloat(j.latitude), lon: parseFloat(j.longitude), name: j.city || j.region || "Your location" };
+}
+
+/** Town name for a position (free, no key; meant to be called from the user's device). */
+async function placeName(lat: number, lon: number): Promise<string> {
+  try {
+    const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+    const j = await r.json();
+    return j.city || j.locality || j.principalSubdivision || "Your location";
+  } catch {
+    return "Your location";
+  }
 }
 
 export function refreshWeather(city: string, unit: "C" | "F", force = false) {

@@ -10,6 +10,7 @@ mod updater;
 mod dragout;
 mod dropin;
 mod ext;
+mod geo;
 mod glass;
 mod hud;
 mod media;
@@ -401,6 +402,7 @@ fn main() {
             system::reveal_path,
             dlmgr::download_cancel,
             posters::movie_poster,
+            geo::geo_position,
             island_move_start,
             island_move_place,
             island_move_anchor,

@@ -242,27 +242,7 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
                     </span>
                   ))}
                 </p>
-                {status === "idle" && (
-                  <div className="ai-foot">
-                    {meta ? <SourceLine meta={meta} /> : <span />}
-                    <motion.button
-                      className="ai-new"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.35, delay: 0.15 }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!active) onActivate();
-                        aiSession.askAgain("");
-                      }}
-                      title="Or just start typing"
-                    >
-                      <kbd>⌫</kbd>
-                      New question
-                    </motion.button>
-                  </div>
-                )}
+                {status === "idle" && meta && <SourceLine meta={meta} />}
               </>
             )}
           </motion.div>

@@ -14,6 +14,8 @@ New
 - A new chat message (WhatsApp, Discord, Telegram…) replaces the banner on screen right away.
 
 Fixes
+- With music playing and a download running, hovering the island opens the music player again (it jumped to Downloads). Click the download bubble to see your downloads.
+- Mister Download Manager: downloads no longer drop out of the island when MDM's window is minimized or it's slow to answer, and Islander reconnects if MDM switches its connection off.
 - A timer or focus alert that finishes while Search or Ask is answering (or a panel is open) now always shows. Banners only count down while they're on screen.
 - Bluetooth no longer gets stuck on "Unavailable" when Windows is slow to answer; the switch stays usable.
 - Weather finds your town with Windows' location service, so it's no longer placed in your internet provider's city.

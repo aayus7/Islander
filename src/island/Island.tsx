@@ -457,7 +457,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   tabRef.current = tab;
   useEffect(() => {
     if (expanded && !wasExpanded.current && !aiSticky && Date.now() - tabLock.current > 600) {
-      const pick: Tab = TABS.includes("downloads")
+      // Open on what the collapsed island was showing: music stays music even while a
+      // download runs in the side bubble (the bubble opens Downloads).
+      const pick: Tab = primary === "media" && TABS.includes("media")
+        ? "media"
+        : primary === "clock" && TABS.includes("clock")
+          ? "clock"
+        : TABS.includes("downloads")
         ? "downloads"
         : session?.playing && TABS.includes("media")
           ? "media"
@@ -1303,6 +1309,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
           onClick={() => {
             if (other) onSelect(other.id);
             else if (bubbleKind === "clock") window.dispatchEvent(new CustomEvent("island:goto", { detail: "clock" }));
+            else if (bubbleKind === "download") window.dispatchEvent(new CustomEvent("island:goto", { detail: "downloads" }));
           }}
           onContextMenu={(e) => {
             e.preventDefault();

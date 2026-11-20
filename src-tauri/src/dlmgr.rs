@@ -46,8 +46,14 @@ pub fn spawn() {
 
 #[derive(Default)]
 struct Mdm {
-    /// The token we already asked to turn the API on for (it changes with every MDM start).
-    api_asked: Option<String>,
+    /// When we last asked MDM to turn its API on.
+    api_asked: Option<Instant>,
+    /// The running downloads from MDM's last answer, and when it answered. If MDM is slow to
+    /// answer for a moment (minimized, busy), the island keeps showing these instead of
+    /// dropping the download and losing track of it.
+    last_running: Vec<Download>,
+    last_ok: Option<Instant>,
+    failing: bool,
     /// Downloads seen running: id → (name, path, size).
     watching: HashMap<u64, (String, String, f64)>,
     /// Finished while we watched: id → (item, when).
@@ -86,7 +92,7 @@ impl Mdm {
         use std::io::{BufRead, BufReader, Write};
         let addr = std::net::SocketAddr::from(([127, 0, 0, 1], ep.port));
         let mut s = std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(250)).ok()?;
-        s.set_read_timeout(Some(Duration::from_millis(1500))).ok();
+        s.set_read_timeout(Some(Duration::from_millis(3000))).ok();
         s.set_write_timeout(Some(Duration::from_millis(500))).ok();
         let mut msg = body;
         msg["token"] = serde_json::Value::String(ep.token.clone());
@@ -103,17 +109,42 @@ impl Mdm {
         let Some(path) = std::env::var_os("APPDATA").map(|d| std::path::PathBuf::from(d).join("misterdownloadmanager").join("ipc.json")) else { return };
         let Ok(bytes) = std::fs::read(&path) else { return };
         let Ok(ep) = serde_json::from_slice::<Endpoint>(&bytes) else { return };
-        let Some(answer) = Self::ask(&ep, serde_json::json!({ "query": "list" })) else { return };
-        if answer.contains("api-off") {
-            // MDM's automation API is off by default: turn it on once per MDM run.
-            if self.api_asked.as_deref() != Some(&ep.token) {
-                self.api_asked = Some(ep.token.clone());
-                let _ = Self::ask(&ep, serde_json::json!({ "api": true }));
-                eprintln!("[dlmgr] turned on Mister Download Manager's automation API");
+        // A moment without an answer: keep showing what MDM last reported (for a while), so a
+        // slow reply doesn't drop the download from the island.
+        let hold = |me: &mut Self, out: &mut Vec<Download>, why: &str| {
+            if !me.failing {
+                me.failing = true;
+                crate::log_line(format!("dlmgr: Mister Download Manager didn't answer ({why}); holding its last state"));
             }
+            if me.last_ok.is_some_and(|t| t.elapsed() < Duration::from_secs(20)) {
+                out.extend(me.last_running.iter().cloned());
+            }
+        };
+        let Some(answer) = Self::ask(&ep, serde_json::json!({ "query": "list" })) else {
+            hold(self, out, "no reply");
+            return;
+        };
+        if answer.contains("api-off") {
+            // MDM's automation API is off by default, and MDM can switch it off again (it did
+            // when its window was minimized): turn it back on whenever that happens, not just
+            // once per run, or the island would lose MDM for good.
+            if self.api_asked.is_none_or(|t| t.elapsed() > Duration::from_secs(3)) {
+                self.api_asked = Some(Instant::now());
+                let _ = Self::ask(&ep, serde_json::json!({ "api": true }));
+                crate::log_line("dlmgr: turned on Mister Download Manager's automation API".into());
+            }
+            hold(self, out, "API off");
             return;
         }
-        let Ok(list) = serde_json::from_str::<MdmList>(&answer) else { return };
+        let Ok(list) = serde_json::from_str::<MdmList>(&answer) else {
+            hold(self, out, "unreadable reply");
+            return;
+        };
+        if self.failing {
+            self.failing = false;
+            crate::log_line("dlmgr: Mister Download Manager answering again".into());
+        }
+        let first = out.len();
 
         let mut seen = std::collections::HashSet::new();
         for d in &list.downloads {
@@ -154,6 +185,8 @@ impl Mdm {
         }
         // Paused, failed or removed: stop following.
         self.watching.retain(|id, _| seen.contains(id) || list.downloads.iter().any(|d| d.id == *id && d.status == "Complete"));
+        self.last_running = out[first..].iter().filter(|d| d.state == "in_progress").cloned().collect();
+        self.last_ok = Some(Instant::now());
     }
 }
 

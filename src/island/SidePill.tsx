@@ -10,7 +10,8 @@ import { fmtElapsed, useScreenRec } from "../lib/screenrec";
 import { RecordGlyph, REC_RED } from "./modules/ScreenRec";
 import { DownloadMinimal, FileTile, progressOf, type Download } from "./modules/Downloads";
 import { Speaker, Sun, type HudData } from "./modules/Hud";
-import { Artwork, Waveform } from "./parts";
+import { Waveform } from "./parts";
+import { CompactArt } from "./content";
 
 /** Sizes of the vertical pill (w × h) for each collapsed form. */
 export const SIDE = {
@@ -23,7 +24,7 @@ export function MediaCompactV({ session }: { session: MediaSession }) {
   const color = useArtColor(session.artwork ?? session.icon ?? null, session.app);
   return (
     <div className="side-col" style={{ width: SIDE.compact.w, height: SIDE.compact.h }}>
-      <Artwork src={session.artwork} size={25} radius={7} />
+      <CompactArt session={session} color={color} size={25} radius={7} />
       <Waveform playing={session.playing} color={color} bars={5} height={15} barWidth={2.6} gap={2} />
     </div>
   );

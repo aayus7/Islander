@@ -593,7 +593,8 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
           ? "media"
           : null;
   const other = bubbleKind === "media" ? otherMedia : null;
-  const split = mode === "compact" && !!bubbleKind && !side && !lifted;
+  // On a side edge the bubble sits under the slim pill instead of beside it.
+  const split = mode === "compact" && !!bubbleKind && !lifted;
   const dockOn = (expanded || aiSticky) && TABS.length > 1;
   const lastOther = useRef(other);
   if (other) lastOther.current = other;
@@ -714,7 +715,8 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   }, [attached]);
   const dockTop = useTransform(h, (v) => (dock === "bottom" ? TOP - DOCK_GAP - DOCK_H : TOP + v + DOCK_GAP));
   const dockSpace = dockOn ? DOCK_GAP + DOCK_H : 0;
-  const below = dock === "bottom" ? 0 : dockSpace;
+  // At the bottom end of a side edge, leave room for the bubble under the pill.
+  const below = dock === "bottom" ? 0 : dockSpace || (side && split && along === "end" ? GAP + BUBBLE : 0);
   const above = dock === "bottom" ? dockSpace : 0;
 
   /* ---- where the island sits in its window (follows the shape as it morphs) ---- */
@@ -788,9 +790,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     if (split) setBubbleVisible(true);
   }, [split]);
 
-  // Bubble centre relative to the island's centre line.
-  const bubbleCx = useTransform(() => w.get() / 2 + GAP + BUBBLE / 2 - (GAP + BUBBLE) * (1 - bp.get()));
+  // Bubble centre relative to the island's centre line (top/bottom: to the right of the
+  // pill; side edges: below it). It grows out of the island as bp goes 0 → 1.
+  const stackV = side;
+  const bubbleCx = useTransform(() => (stackV ? 0 : w.get() / 2 + GAP + BUBBLE / 2 - (GAP + BUBBLE) * (1 - bp.get())));
+  const bubbleCy = useTransform(() => (stackV ? TOP + h.get() + GAP + BUBBLE / 2 - (GAP + BUBBLE) * (1 - bp.get()) : TOP + BUBBLE / 2));
   const bubbleX = useTransform(bubbleCx, (cx) => cx - BUBBLE / 2);
+  const bubbleY = useTransform(bubbleCy, (cy) => cy - BUBBLE / 2);
   const bubbleScale = useTransform(bp, [0, 0.6, 1], [0.55, 0.92, 1]);
   const bubbleContentOpacity = useTransform(bp, [0.45, 0.9], [0, 1]);
 
@@ -803,9 +809,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       : attached
       ? { x: (cx - DROP_W / 2) * s, y: 0, w: DROP_W * s, h: DROP_D * s }
       : { x: origin.x * s, y: (origin.y - above) * s, w: target.w * s, h: (target.h + below + above) * s };
-    const bubble = split ? { x: (origin.x + target.w + GAP) * s, y: origin.y * s, w: BUBBLE * s, h: BUBBLE * s } : null;
+    const bubble = !split
+      ? null
+      : side
+        ? { x: (origin.x + (target.w - BUBBLE) / 2) * s, y: (origin.y + target.h + GAP) * s, w: BUBBLE * s, h: BUBBLE * s }
+        : { x: (origin.x + target.w + GAP) * s, y: origin.y * s, w: BUBBLE * s, h: BUBBLE * s };
     bridge.setHitRects(island, bubble);
-  }, [target.w, target.h, split, sizeScale, attached, tucked, origin.x, origin.y, below, above]);
+  }, [target.w, target.h, split, side, sizeScale, attached, tucked, origin.x, origin.y, below, above]);
 
   // One-time prompt per browser: media playing in a browser without the extension connected
   // → point to the store page (tab titles, live streams and downloads need it).
@@ -982,7 +992,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       {/* Everything moves together to the edge the island is docked on. */}
       <motion.div className="stage-shift" style={{ x: shiftX, y: shiftY }}>
       {/* Gooey bridge layer: blurred + alpha-thresholded copy that only shows where shapes meet. */}
-      {bubbleVisible && mode !== "expanded" && solid && <GooLayer w={w} h={h} cx={bubbleCx} scale={bubbleScale} fill={fill} />}
+      {bubbleVisible && mode !== "expanded" && solid && <GooLayer w={w} h={h} cx={bubbleCx} cy={bubbleCy} scale={bubbleScale} fill={fill} />}
 
       {attVisible && <Waterdrop att={att} fill={fill} />}
 
@@ -1223,7 +1233,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       {bubbleVisible && (bubbleSession || bubbleKind === "clock" || bubbleKind === "download") && (
         <motion.div
           className="bubble"
-          style={{ x: bubbleX, scale: bubbleScale, top: TOP, width: BUBBLE, height: BUBBLE, background: fill }}
+          style={{ x: bubbleX, y: bubbleY, scale: bubbleScale, top: 0, width: BUBBLE, height: BUBBLE, background: fill }}
           initial={false}
           animate={{
             boxShadow: `inset 0 0 0 1.4px ${
@@ -1268,14 +1278,14 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
 /* ---------------- Goo ---------------- */
 
-function GooLayer({ w, h, cx, scale, fill }: { w: MotionValue<number>; h: MotionValue<number>; cx: MotionValue<number>; scale: MotionValue<number>; fill: string }) {
+function GooLayer({ w, h, cx, cy, scale, fill }: { w: MotionValue<number>; h: MotionValue<number>; cx: MotionValue<number>; cy: MotionValue<number>; scale: MotionValue<number>; fill: string }) {
   const W = 700;
   const rectX = useTransform(w, (v) => W / 2 - v / 2);
   const rx = useTransform(h, (v) => v / 2);
   const ccx = useTransform(cx, (v) => W / 2 + v);
   const cr = useTransform(scale, (s) => (BUBBLE / 2) * s);
   return (
-    <svg className="goo" width={W} height={120} style={{ marginLeft: -W / 2 }}>
+    <svg className="goo" width={W} height={240} style={{ marginLeft: -W / 2 }}>
       <defs>
         <filter id="goo" x="-20%" y="-50%" width="140%" height="200%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceGraphic" stdDeviation="4" />
@@ -1284,7 +1294,7 @@ function GooLayer({ w, h, cx, scale, fill }: { w: MotionValue<number>; h: Motion
       </defs>
       <g filter="url(#goo)">
         <motion.rect x={rectX} y={TOP} width={w} height={h} rx={rx} fill={fill} />
-        <motion.circle cx={ccx} cy={TOP + BUBBLE / 2} r={cr} fill={fill} />
+        <motion.circle cx={ccx} cy={cy} r={cr} fill={fill} />
       </g>
     </svg>
   );

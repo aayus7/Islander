@@ -9,27 +9,36 @@ import { Artwork, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, 
 /* ---------- Compact: art on the left, waveform on the right ---------- */
 
 export function MediaCompact({ session, width, height }: { session: MediaSession; width: number; height: number }) {
-  // Track changes while collapsed (media keys, autoplay) turn the cover like the open island.
-  const flipDir = useRef(1);
   // No artwork? Take the colour from the app's own icon (purple for mpv, green for Spotify…).
   const color = useArtColor(session.artwork ?? session.icon ?? null, session.app);
   return (
     <div className="row" style={{ width, height, padding: "0 9px 0 8px", justifyContent: "space-between" }}>
-      <span className="cmp-glow-wrap">
-        {/* A soft halo in the album's colour, breathing slowly while it plays. */}
-        <motion.span
-          className="cmp-glow"
-          style={{ background: color }}
-          initial={false}
-          animate={session.playing ? { opacity: [0.38, 0.62, 0.38], scale: [0.96, 1.08, 0.96] } : { opacity: 0, scale: 0.9 }}
-          transition={session.playing ? { duration: 3.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.5 }}
-        />
-        <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={23} radius={6.5} />
-      </span>
+      <CompactArt session={session} color={color} size={23} radius={6.5} />
       <div style={{ paddingRight: 3 }}>
         <Waveform playing={session.playing} color={color} bars={6} height={14} barWidth={2.6} gap={2} />
       </div>
     </div>
+  );
+}
+
+/**
+ * The collapsed island's cover: a soft halo in the album's colour, breathing while it plays,
+ * and the cover turning on every track change (media keys, autoplay) like the open island.
+ * Shared by the top/bottom pill and the side pill, so both look and move the same.
+ */
+export function CompactArt({ session, color, size, radius }: { session: MediaSession; color: string; size: number; radius: number }) {
+  const flipDir = useRef(1);
+  return (
+    <span className="cmp-glow-wrap">
+      <motion.span
+        className="cmp-glow"
+        style={{ background: color }}
+        initial={false}
+        animate={session.playing ? { opacity: [0.38, 0.62, 0.38], scale: [0.96, 1.08, 0.96] } : { opacity: 0, scale: 0.9 }}
+        transition={session.playing ? { duration: 3.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.5 }}
+      />
+      <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={size} radius={radius} />
+    </span>
   );
 }
 

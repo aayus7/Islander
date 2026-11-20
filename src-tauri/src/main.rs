@@ -405,6 +405,7 @@ fn main() {
             geo::geo_position,
             island_move_start,
             island_move_place,
+            island_land_now,
             island_move_anchor,
             updater::update_check,
             updater::update_status,
@@ -697,6 +698,21 @@ fn island_move_anchor(x: f64, y: f64) {
 /// tap — a touchpad tap-to-click especially — can come and go between two polls of the
 /// mouse button, so the click itself tells us.
 static PLACE_NOW: AtomicBool = AtomicBool::new(false);
+/// Where the window jumps when a move ends. The island page asks for that jump itself
+/// (island_land_now), right after it has offset the island to where it is on screen, so
+/// both reach the screen in the same frame.
+static LAND_TO: std::sync::Mutex<Option<(AppHandle, PhysicalPosition<i32>)>> = std::sync::Mutex::new(None);
+static LANDED: AtomicBool = AtomicBool::new(false);
+
+#[tauri::command]
+fn island_land_now() {
+    if let Some((app, to)) = LAND_TO.lock().unwrap().take() {
+        if let Some(win) = app.get_webview_window("island") {
+            let _ = win.set_position(to);
+        }
+        LANDED.store(true, Ordering::SeqCst);
+    }
+}
 #[tauri::command]
 fn island_move_place() {
     PLACE_NOW.store(true, Ordering::SeqCst);
@@ -893,9 +909,17 @@ fn run_move(app: &AppHandle, click: bool) {
     let (cx, cy) = anchor();
     let rel_x = (pos.0 + cx * scale - to.x as f64) / scale / ss;
     let rel_y = (pos.1 + cy * scale - to.y as f64) / scale / ss;
+    LANDED.store(false, Ordering::SeqCst);
+    *LAND_TO.lock().unwrap() = Some((app.clone(), to));
     let _ = app.emit("move://landing", json!({ "x": rel_x, "y": rel_y }));
-    std::thread::sleep(Duration::from_millis(12));
-    let _ = win.set_position(to);
+    // Normally the page asks for the jump within a few ms; if it doesn't, do it anyway.
+    let asked = Instant::now();
+    while !LANDED.load(Ordering::SeqCst) && asked.elapsed() < Duration::from_millis(150) {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    if LAND_TO.lock().unwrap().take().is_some() {
+        let _ = win.set_position(to);
+    }
     match old {
         Some(old) => apply_settings(app, &state, &old, &new),
         None => {

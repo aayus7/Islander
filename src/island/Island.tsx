@@ -67,6 +67,10 @@ const COMPACT_CLOCK = { w: 204, h: 37, r: 18.5 };
 
 /** No-overshoot spring for shape changes while the island is being moved. */
 const CALM = { type: "spring" as const, stiffness: 520, damping: 46, mass: 1 };
+/** Picked up: a quick pop with a whisper of overshoot. */
+const LIFT = { type: "spring" as const, stiffness: 430, damping: 22, mass: 0.8 };
+/** Let go: one soft, critically-damped-ish glide into place (position and size together). */
+const LAND = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.9, restDelta: 0.01 };
 
 /** Top-left of the island inside the window for a dock (w/h = current size). */
 function islandOrigin(dock: Dock, along: DockAlong, w: number, h: number, below: number, above: number) {
@@ -206,6 +210,11 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   // Press and hold the island to lift it, then slide it along the top: it snaps to the
   // top-left corner, the centre or the top-right corner (also in the right-click menu).
   const [lifted, setLifted] = useState(false);
+  /** Let go: the island is gliding into its spot (it settles back to its normal size
+   *  together with that glide, not after it). */
+  const [dropping, setDropping] = useState(false);
+  /** Finger down on the island (a click, or the start of a hold). */
+  const [pressing, setPressing] = useState(false);
   const pinRef = useRef<() => void>(() => {});
   const dragOnRef = useRef(false);
   /** True from the moment a hold picks the island up until it's been dropped. */
@@ -222,9 +231,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     const b = on<{ dock: Dock; along: DockAlong }>("move://zone", setPreview);
     const c = on("move://end", () => {
       setPreview(null);
+      justDropped.current = true;
+      clearTimeout(hoverTimer.current);
+      setHover(false);
       swallowClick.current = true;
       setTimeout(() => {
         setLifted(false);
+        setDropping(false);
         swallowClick.current = false;
         pickupRef.current = false;
         // Picked up from Search or Ask: give it the keyboard back so you can keep typing.
@@ -241,7 +254,14 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const along: DockAlong = preview?.along ?? settings.dockAlong ?? "center";
   const side = dock === "left" || dock === "right";
   const hoverTimer = useRef<number>(0);
+  /** Just dropped with the cursor still on it: don't spring open under the cursor.
+   *  It opens again normally once the pointer has left it once. */
+  const justDropped = useRef(false);
   const setHoverDelayed = useCallback((v: boolean) => {
+    if (justDropped.current) {
+      if (v) return;
+      justDropped.current = false;
+    }
     clearTimeout(hoverTimer.current);
     hoverTimer.current = window.setTimeout(() => {
       setHover(v);
@@ -776,9 +796,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         dragOn.set(0);
         landX.set(x - (o.x + w.get() / 2));
         landY.set(y - (o.y + h.get() / 2));
-        const sp = { type: "spring" as const, stiffness: 260, damping: 26, mass: 0.9 };
-        animate(landX, 0, sp);
-        animate(landY, 0, sp);
+        // Now (same task, before this frame is painted) ask the backend to jump the window,
+        // so the new offset and the new window position reach the screen together: no
+        // one-frame flash of the island at its final spot before it glides there.
+        send("island_land_now");
+        setDropping(true);
+        animate(landX, 0, LAND);
+        animate(landY, 0, LAND);
       }),
     [], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -936,9 +960,10 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       // Safety net: a move always ends within 90 s (see run_move), so never stay stuck.
       window.setTimeout(() => (pickupRef.current = false), 95_000);
       pinForMove();
+      setPressing(false);
       setLifted(true);
       send("island_move_start", { click: false });
-    }, 420);
+    }, 360);
   };
   const liftMove = (e: React.PointerEvent<HTMLElement>) => {
     // Moving before the hold completes is a normal drag/swipe, not a pick-up.
@@ -951,7 +976,19 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const liftUp = () => {
     clearTimeout(holdTimer.current);
     holdAt.current = null;
+    setPressing(false);
   };
+  // A press that ends anywhere (even off the island) lets it spring back.
+  useEffect(() => {
+    if (!pressing) return;
+    const up = () => setPressing(false);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("blur", up);
+    return () => {
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("blur", up);
+    };
+  }, [pressing]);
 
   // (The showcase stage hit-tests like the native side, so it opts out of DOM hover too.)
   const domHover = bridge.isNative || (window as unknown as { __stageHover?: boolean }).__stageHover
@@ -1019,7 +1056,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         height={FRAME_H + SHADOW_PAD}
         style={{ top: 0, marginLeft: -WIN_W / 2 }}
         initial={false}
-        animate={{ opacity: mode === "expanded" || mode === "ai" || mode === "incoming" || mode === "rec" || lifted ? 1 : 0 }}
+        animate={{ opacity: mode === "expanded" || mode === "ai" || mode === "incoming" || mode === "rec" || (lifted && !dropping) ? 1 : 0 }}
         transition={{ duration: mode === "expanded" || mode === "ai" || mode === "incoming" || mode === "rec" ? 0.35 : 0.25, ease: [0.25, 0.1, 0.25, 1] }}
       >
         {/* The blur is an SVG filter over the whole frame (not a CSS-blurred layer), so
@@ -1044,12 +1081,21 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         className="island"
         style={{ width: FRAME_W, height: FRAME_H, marginLeft: -FRAME_W / 2, top: TOP, clipPath: clip }}
         initial={false}
-        animate={{ backgroundColor: mode === "ai" && !aiThinking ? "rgba(0,0,0,0)" : fill, scale: lifted ? 1.06 : 1 }}
-        transition={{ ...springs.press, scale: lifted ? CALM : springs.press, backgroundColor: { duration: mode === "ai" ? 0.35 : 0.2 } }}
-        whileTap={mode !== "expanded" && mode !== "ai" && !lifted ? { scale: 0.95 } : undefined}
+        animate={{
+          backgroundColor: mode === "ai" && !aiThinking ? "rgba(0,0,0,0)" : fill,
+          // Pressed: it gives a little; held long enough: it pops up off the screen
+          // (a soft overshoot, like lifting an app icon); let go: it settles as it lands.
+          scale: lifted && !dropping ? 1.06 : pressing && mode !== "expanded" && mode !== "ai" ? 0.95 : 1,
+        }}
+        transition={{
+          ...springs.press,
+          scale: lifted && !dropping ? LIFT : dropping ? LAND : springs.press,
+          backgroundColor: { duration: mode === "ai" ? 0.35 : 0.2 },
+        }}
         onWheel={onWheel}
         onPointerDown={(e) => {
           if (e.button === 0) swipe.current = { y: e.clientY, t: performance.now() };
+          if (e.button === 0) setPressing(true);
           liftDown(e);
         }}
         onPointerMove={liftMove}

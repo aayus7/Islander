@@ -9,7 +9,8 @@ from playwright.async_api import async_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 URL = os.environ.get("STAGE_URL", "http://localhost:1420/showcase/stage.html")
-W, H, DPR = 2560, 1440, 1
+W, H = 2560, 1440
+DPR = float(os.environ.get("DPR", "1"))  # 2 = crisp close-ups (trailer)
 
 
 def ease(t, kind="io"):
@@ -151,7 +152,7 @@ async def record(name, fps=60, from_ms=0, to_ms=None, preview=False, out_dir=Non
         n_total = int((to_ms or sc.duration) / dt)
         frame = 0
         t0 = time.time()
-        clip = sc.clip
+        clip = tuple(int(v) for v in os.environ["CLIP"].split(",")) if os.environ.get("CLIP") else sc.clip
         for i in range(n_total + 1):
             t = i * dt
             while ei < len(events) and events[ei][0] <= t:
@@ -180,7 +181,7 @@ async def record(name, fps=60, from_ms=0, to_ms=None, preview=False, out_dir=Non
                 continue
             params = {"format": "png", "captureBeyondViewport": False}
             if clip:
-                params["clip"] = {"x": clip[0], "y": clip[1], "width": clip[2], "height": clip[3], "scale": 1}
+                params["clip"] = {"x": clip[0], "y": clip[1], "width": clip[2], "height": clip[3], "scale": DPR}  # CSS px; output is DPR x larger
             shot = await cdp.send("Page.captureScreenshot", params)
             with open(f"{out_dir}/f_{frame:05d}.png", "wb") as f:
                 f.write(base64.b64decode(shot["data"]))

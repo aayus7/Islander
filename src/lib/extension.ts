@@ -4,7 +4,7 @@ import { call } from "./native";
 /** Store pages. Chrome, Edge, Brave and Opera all install from the Chrome Web Store. */
 export const STORE = {
   chrome: "https://chromewebstore.google.com/detail/godincneomgpbkdeaehkhiimpcmbffce",
-  firefox: "https://addons.mozilla.org/firefox/addon/FIREFOX_ADDON_SLUG/",
+  firefox: "https://addons.mozilla.org/firefox/addon/islander-media-bridge/",
 };
 
 /** Browser names as the extension reports them. */

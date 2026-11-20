@@ -260,7 +260,7 @@ html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
       <a href="#features">Features</a>
       <a href="#craft" class="hide-s">1:1</a>
       <a href="https://github.com/aayus7/Islander">GitHub</a>
-      <a class="btn btn-chrome" style="--sheen-delay: 0.6s" href="https://github.com/aayus7/Islander/releases/latest">Download</a>
+      <a class="btn btn-chrome" style="--sheen-delay: 0.6s" href="https://github.com/aayus7/Islander/releases/download/v0.9.2/Islander_0.9.2_x64-setup.exe" data-download>Download</a>
     </nav>
   </div>
 </header>
@@ -275,7 +275,7 @@ html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
       <h1 id="hero-title">The Dynamic Island.<br>Now on <span class="chrome">Windows.</span></h1>
       <p class="lede">The most faithful 1:1 Dynamic Island for Windows 10 and 11. Every spring, morph and cover flip from the iPhone, rebuilt for your desktop.</p>
       <div class="ctas">
-        <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/latest"><svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 2.3 6.5 1.4v6.2H0zm7.3-1L16 0v7.6H7.3zM0 8.4h6.5v6.2L0 13.7zm7.3 0H16V16l-8.7-1.2z"/></svg>Download for Windows</a>
+        <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/download/v0.9.2/Islander_0.9.2_x64-setup.exe" data-download><svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 2.3 6.5 1.4v6.2H0zm7.3-1L16 0v7.6H7.3zM0 8.4h6.5v6.2L0 13.7zm7.3 0H16V16l-8.7-1.2z"/></svg>Download for Windows</a>
         <a class="btn btn-ghost" href="#film">Watch the film</a>
       </div>
       <div class="meta"><span>Free</span><span>Open source</span><span>Version 0.9.2</span><span>Windows 10 &amp; 11</span></div>
@@ -405,7 +405,7 @@ html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
     <canvas class="metal" id="metal-get" aria-hidden="true"></canvas>
     <div class="wrap get-in">
       <h2 id="get-title">Put an island on<br>your <span class="chrome">desktop.</span></h2>
-      <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/latest"><svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 2.3 6.5 1.4v6.2H0zm7.3-1L16 0v7.6H7.3zM0 8.4h6.5v6.2L0 13.7zm7.3 0H16V16l-8.7-1.2z"/></svg>Download for Windows</a>
+      <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/download/v0.9.2/Islander_0.9.2_x64-setup.exe" data-download><svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 2.3 6.5 1.4v6.2H0zm7.3-1L16 0v7.6H7.3zM0 8.4h6.5v6.2L0 13.7zm7.3 0H16V16l-8.7-1.2z"/></svg>Download for Windows</a>
       <div class="meta"><span>Free</span><span>Windows 10 &amp; 11 · 64-bit</span><span>Updates itself</span></div>
       <div class="ctas">
         <a class="btn btn-ghost" href="https://github.com/aayus7/Islander">View on GitHub</a>
@@ -420,7 +420,7 @@ html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
     <div class="foot">
       <a class="brand" href="#top"><span class="logo" aria-hidden="true"></span>Islander</a>
       <nav aria-label="Footer">
-        <a href="https://github.com/aayus7/Islander/releases/latest">Download</a>
+        <a href="https://github.com/aayus7/Islander/releases/download/v0.9.2/Islander_0.9.2_x64-setup.exe" data-download>Download</a>
         <a href="https://github.com/aayus7/Islander">GitHub</a>
         <a href="https://github.com/aayus7/Islander/blob/main/LICENSE">License</a>
         <a href="privacy.html">Privacy</a>
@@ -505,6 +505,25 @@ html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
   const onScroll = () => nav.classList.toggle("solid", scrollY > 40);
   addEventListener("scroll", onScroll, { passive: true });
   onScroll();
+
+  /* ---------- downloads: straight to the newest installer (no stop at GitHub) ----------
+     The links already point at the current installer. GitHub then names the newest release's
+     installer, so future releases need no change here. If GitHub doesn't answer, nothing changes. */
+  (() => {
+    const links = document.querySelectorAll("a[data-download]");
+    const apply = (url) => links.forEach((a) => (a.href = url));
+    try { const c = sessionStorage.getItem("islander-dl"); if (c) apply(c); } catch (e) {}
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 5000);
+    fetch("https://api.github.com/repos/aayus7/Islander/releases/latest", { signal: ctl.signal, headers: { Accept: "application/vnd.github+json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rel) => {
+        const exe = rel && (rel.assets || []).find((a) => /x64-setup\.exe$/i.test(a.name));
+        if (!exe) return;
+        apply(exe.browser_download_url);
+        try { sessionStorage.setItem("islander-dl", exe.browser_download_url); } catch (e) {}
+      })
+      .catch(() => {});
+  })();
 
   /* ---------- reveals: each block eases in once it reaches the screen ---------- */
   (() => {

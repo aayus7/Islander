@@ -78,6 +78,8 @@ pub struct Settings {
     pub dock_along: String,
     /// The one-time "you can move the island" tip was shown.
     pub move_tip_shown: bool,
+    /// Browsers already shown the one-time "get the extension" prompt ("chrome", "edge", "firefox"…).
+    pub ext_tips: Vec<String>,
     /// Nearby sharing (LocalSend) in the Shelf: send to / receive from phones on this network.
     pub nearby_sharing: bool,
     /// The name other devices see ("" = this PC's name).
@@ -139,6 +141,7 @@ impl Default for Settings {
             dock: "top".into(),
             dock_along: "center".into(),
             move_tip_shown: false,
+            ext_tips: Vec::new(),
             font: "inter".into(),
             nearby_sharing: true,
             nearby_name: String::new(),

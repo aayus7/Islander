@@ -353,6 +353,7 @@ fn main() {
             speech::speech_cancel,
             dropin::drop_attach,
             startup::open_extension_folder,
+            ext::ext_connected,
             power::power_status,
             power::brightness_get,
             power::brightness_set,

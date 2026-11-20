@@ -2,6 +2,7 @@
 // with coloured icons, a search field, and grouped pages. Every change applies live
 // and is saved by the backend.
 import { AnimatePresence, motion, Reorder, useDragControls } from "motion/react";
+import { browserName, connectedBrowsers, STORE, type Browser } from "./lib/extension";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { bridge } from "./bridge";
 import { useSettings } from "./lib/settings";
@@ -623,6 +624,35 @@ function Shortcuts() {
   );
 }
 
+/** Islander Media Bridge: store buttons, or "Connected" once a browser's extension is talking to the app. */
+function ExtensionGroup() {
+  const [on, setOn] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const poll = () => connectedBrowsers().then((b) => alive && setOn(b));
+    poll();
+    const t = setInterval(poll, 2000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+  const chromium = on.filter((b) => b !== "firefox");
+  return (
+    <Group
+      title="Browser extension"
+      footer="Islander Media Bridge shows what's playing in your browser tabs, with live streams and downloads. Spotify and other Windows apps show up without it. Edge asks once to allow extensions from the Chrome Web Store."
+    >
+      <Row label="Chrome, Edge, Brave and Opera" hint={chromium.length ? `Showing tabs from ${chromium.map((b) => browserName(b as Browser)).join(", ")}` : "From the Chrome Web Store"}>
+        {chromium.length ? <span className="sp-badge ok">Connected</span> : <button className="sp-btn" onClick={() => send("launch", { target: STORE.chrome })}>Add to Chrome</button>}
+      </Row>
+      <Row label="Firefox" hint={on.includes("firefox") ? "Showing tabs from Firefox" : "From Firefox Add-ons"}>
+        {on.includes("firefox") ? <span className="sp-badge ok">Connected</span> : <button className="sp-btn" onClick={() => send("launch", { target: STORE.firefox })}>Add to Firefox</button>}
+      </Row>
+    </Group>
+  );
+}
+
 function About() {
   const { reset } = useSettings();
   const [confirm, setConfirm] = useState(false);
@@ -642,11 +672,7 @@ function About() {
         <div className="sp-about-tag">A Dynamic Island for Windows</div>
       </div>
       <SoftwareUpdate />
-      <Group title="Browser extension" footer="Islander Media Bridge shows what's playing in Chrome, Edge, Brave and Firefox tabs, plus live streams and downloads. It's in review at the Chrome Web Store and Firefox Add-ons; Spotify and other Windows apps already show up without it.">
-        <Row label="Islander Media Bridge">
-          <span className="sp-badge">Coming soon</span>
-        </Row>
-      </Group>
+      <ExtensionGroup />
       <Group title="Open source" footer="Islander is free software under the GNU General Public License v3.0 or later: you can read, change and share it, as long as shared versions stay open too.">
         <Row label="Source code" hint="github.com/aayus7/Islander">
           <button className="sp-btn" onClick={() => send("launch", { target: "https://github.com/aayus7/Islander" })}>View on GitHub</button>

@@ -55,6 +55,8 @@ export interface AppSettings {
   dockAlong: DockAlong;
   /** The one-time "you can move the island" tip was shown. */
   moveTipShown: boolean;
+  /** Browsers already shown the one-time "get the extension" prompt. */
+  extTips: string[];
   /** "inter" = bundled Inter (default); "system" = SF Pro if installed, else Segoe UI. */
   font: "inter" | "system";
   /** Nearby sharing (LocalSend) in the Shelf. */
@@ -116,6 +118,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dock: "top",
   dockAlong: "center",
   moveTipShown: false,
+  extTips: [],
   font: "inter",
   nearbySharing: true,
   nearbyName: "",

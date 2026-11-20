@@ -140,6 +140,12 @@ pub fn snapshot() -> Vec<(String, ExtSession)> {
     })
 }
 
+/// For the app: browsers with the extension connected right now ("chrome", "edge", "firefox", "brave", "opera").
+#[tauri::command]
+pub fn ext_connected() -> Vec<String> {
+    connected_browsers()
+}
+
 /// Browsers that currently have the extension connected.
 pub fn connected_browsers() -> Vec<String> {
     with_conns(|c| c.keys().cloned().collect())

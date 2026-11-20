@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · Islander</title>
+<meta name="description" content="Privacy policy for Islander and the Islander Media Bridge browser extension.">
+<link rel="icon" href="media/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#050506">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ground: #050506; --panel: #0d0d11; --ink: #f5f5f7; --mute: #a1a1aa; --faint: #6b6b74;
+  --line: rgba(255, 255, 255, 0.08); --line-2: rgba(255, 255, 255, 0.14);
+  --display: "Geist", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--display); font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+nav { display: flex; align-items: center; justify-content: space-between; padding: 28px 0; }
+.brand { display: inline-flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; font-weight: 600; font-size: 19px; letter-spacing: -0.02em; }
+.pill { width: 44px; height: 22px; border-radius: 99px; background: #000; box-shadow: inset 0 0 0 1px var(--line-2); position: relative; }
+.pill::after { content: ""; position: absolute; right: 4px; top: 4px; width: 14px; height: 14px; border-radius: 50%; background: #ffa53a; box-shadow: 0 0 10px rgba(255, 165, 58, 0.6); }
+nav a.back { color: var(--mute); text-decoration: none; font-size: 15px; }
+nav a.back:hover { color: var(--ink); }
+header { padding: 56px 0 28px; border-bottom: 1px solid var(--line); }
+h1 { margin: 0; font-size: clamp(40px, 7vw, 64px); line-height: 1.02; letter-spacing: -0.045em; font-weight: 600; }
+h1 em { font-family: var(--serif); font-weight: 400; letter-spacing: -0.01em; }
+.date { color: var(--faint); margin-top: 14px; font-size: 15px; }
+.summary { margin: 36px 0 8px; padding: 22px 24px; border-radius: 18px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
+.summary p { margin: 0; }
+h2 { font-size: 26px; letter-spacing: -0.03em; font-weight: 600; margin: 52px 0 10px; }
+h3 { font-size: 18px; letter-spacing: -0.015em; font-weight: 600; margin: 28px 0 6px; }
+p, li { color: #d4d4d8; }
+ul { padding-left: 1.2em; }
+li { margin: 6px 0; }
+strong { color: var(--ink); font-weight: 600; }
+a { color: var(--ink); text-underline-offset: 3px; text-decoration-color: rgba(255, 255, 255, 0.35); }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.88em; background: rgba(255, 255, 255, 0.06); padding: 1px 6px; border-radius: 6px; }
+footer { margin: 72px 0 56px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--faint); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="./"><span class="pill" aria-hidden="true"></span>Islander</a>
+    <a class="back" href="./">← Back to Islander</a>
+  </nav>
+
+  <header>
+    <h1>Privacy <em>Policy</em></h1>
+    <div class="date">Effective November 19, 2026</div>
+  </header>
+
+  <div class="summary">
+    <p><strong>In short:</strong> Islander and the Islander Media Bridge extension work on your own PC. The extension never sends anything to the internet: what it reads goes only to Islander on the same computer. Islander has no accounts, no ads, no analytics and no tracking, and nothing about you is sold or shared. A few optional features (asking a question, weather, posters, updates) contact online services, described below.</p>
+  </div>
+
+  <h2>Islander Media Bridge (browser extension)</h2>
+  <p>The extension lets Islander show what is playing in your browser tabs and the progress of your downloads. It is available for Chrome, Edge, Brave and Opera (from the Chrome Web Store) and for Firefox.</p>
+
+  <h3>What it reads</h3>
+  <ul>
+    <li><strong>Media on the page you are playing:</strong> the title, artist or channel, album, artwork, site name and icon, and playback state (playing or paused, position, length, speed, whether it is live).</li>
+    <li><strong>Your browser's downloads:</strong> for downloads in progress or just finished, the file name, its location on your PC and how much has been received.</li>
+  </ul>
+  <p>It does not read passwords, form contents, messages, cookies, your browsing history or the rest of the page.</p>
+
+  <h3>Where it goes</h3>
+  <p>Only to the Islander app on the same computer, over a local connection (<code>ws://127.0.0.1</code>, which never leaves your PC). The extension has no server and sends nothing to the developer or anyone else. If Islander isn't running, the information goes nowhere.</p>
+  <p>To show artwork, the extension loads the cover image the website itself points to (for example a video's thumbnail), without your cookies, and shrinks it before handing it to Islander. Nothing is stored: the information is only kept in memory while the tab is open.</p>
+
+  <h3>Why it needs its permissions</h3>
+  <ul>
+    <li><strong>Access to websites:</strong> media can play on any site, so the extension needs to see the player on the site you are using, and to load that site's cover art.</li>
+    <li><strong>Downloads:</strong> to show download progress in the island and let you cancel a download from it.</li>
+  </ul>
+  <p>The extension does not collect, sell or transfer user data, and does not use it for advertising, credit decisions or anything unrelated to showing your media and downloads in Islander.</p>
+
+  <h2>Islander (the Windows app)</h2>
+  <p>Islander runs on your PC. Your settings, clipboard history, shelf files, notes, to-dos and timers are stored only on your computer. Clipboard history skips anything that password managers mark as private. Islander shows notifications, media and system status by reading them from Windows on your PC; it does not send them anywhere.</p>
+
+  <h3>Optional features that use the internet</h3>
+  <ul>
+    <li><strong>Search or Ask:</strong> your question (and, for voice questions, the recording) is sent to Islander's relay server, which gets the answer from Google's Gemini API. Voice recordings are turned into text by Cloudflare Workers AI. To find up-to-date facts, the relay may look up your question on services such as Wikipedia, news search and sports and price sources; those requests come from the relay, not from your PC. The relay does not store your questions or recordings. To keep the service free and fair, it counts questions per day against a random ID created when Islander was installed (not linked to your name, email or account); these counts expire after two days. Google and Cloudflare handle the content under their own terms. You can also use your own Gemini API key or relay in Settings.</li>
+    <li><strong>Weather:</strong> to find your city, Islander looks up your approximate location from your IP address with GeoJS, or uses the city you choose, and gets the forecast from Open-Meteo.</li>
+    <li><strong>Movie and series posters:</strong> when you watch something, its title is looked up on Cinemeta and MetaHub to find the poster.</li>
+    <li><strong>Updates:</strong> Islander checks GitHub for new versions and downloads them from there.</li>
+    <li><strong>Nearby sharing:</strong> files you send or accept travel directly between your devices on your local network (using the LocalSend protocol), never through the internet.</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>Islander isn't directed at children and does not knowingly collect information from anyone.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the new version will be posted on this page with a new effective date. The source code of Islander and the extension is public, so you can check exactly what they do: <a href="https://github.com/aayus7/Islander">github.com/aayus7/Islander</a>.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about privacy: open an issue at <a href="https://github.com/aayus7/Islander/issues">github.com/aayus7/Islander/issues</a>.</p>
+
+  <footer>Islander is free software under the GNU GPL v3.0. Not affiliated with Apple Inc.</footer>
+</div>
+</body>
+</html>

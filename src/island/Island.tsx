@@ -24,6 +24,7 @@ import { DownloadCompact, DownloadMinimal, DownloadsPanel, downloadsPanelHeight,
 import { INCOMING_SIZE, IncomingCard, NEARBY_H } from "./modules/Nearby";
 import { useNearby } from "../lib/nearby";
 import { markScrolled, tabStep } from "../lib/wheel";
+import { browserName, browserOf, connectedBrowsers, storeFor } from "../lib/extension";
 import { AiPanel, AI_BAR_H, type AiView } from "./AiPanel";
 import { AiThinking, THINKING_SIZE } from "./AiThinking";
 import { useAiSession } from "../lib/aiSession";
@@ -795,7 +796,35 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     bridge.setHitRects(island, bubble);
   }, [target.w, target.h, split, sizeScale, attached, tucked, origin.x, origin.y, below, above]);
 
-  // One-time tip so people find out the island can move.
+  // One-time prompt per browser: media playing in a browser without the extension connected
+  // → point to the store page (tab titles, live streams and downloads need it).
+  const extAsked = useRef(new Set<string>());
+  const extCandidate = sessions.find((x) => x.playing && x.source !== "extension" && browserOf(x.id));
+  const extBrowser = extCandidate ? browserOf(extCandidate.id) : null;
+  useEffect(() => {
+    if (!extBrowser || settings.extTips.includes(extBrowser) || extAsked.current.has(extBrowser)) return;
+    const b = extBrowser;
+    const icon = extCandidate?.icon ?? null;
+    // only after it has been playing a few seconds, so a quick blip never triggers it
+    const t = setTimeout(async () => {
+      if ((await connectedBrowsers()).includes(b)) return;
+      extAsked.current.add(b);
+      pushBanner({
+        id: "tip-ext-" + b,
+        app: "Islander",
+        title: `See your ${browserName(b)} tabs in the island`,
+        body: "Click to get the free browser extension",
+        icon,
+        glyph: "update",
+        tint: "#1c1c1e",
+        url: storeFor(b),
+        ttl: 10000,
+      });
+      update({ extTips: [...settings.extTips, b] });
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [extBrowser, settings.extTips]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (settings.moveTipShown) return;
     const t = setTimeout(() => {

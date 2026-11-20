@@ -30,6 +30,8 @@ export interface BannerData {
   goto?: string;
   /** File to show in Explorer on click. */
   reveal?: string;
+  /** Web page to open on click (e.g. the extension's store page). */
+  url?: string;
   /** Click runs this instead (e.g. "update": install the downloaded update). */
   action?: "update";
   /** A finished download: its file name (shown as the file's tile with a check). */
@@ -172,6 +174,7 @@ export function Banner({ banner, width }: { banner: BannerData; width: number })
         if (banner.reveal) send("reveal_path", { path: banner.reveal });
         if (banner.goto) window.dispatchEvent(new CustomEvent("island:goto", { detail: banner.goto }));
         if (banner.action === "update") send("update_install");
+        if (banner.url) send("launch", { target: banner.url });
         dismissBanner(banner.id);
       }}
     >

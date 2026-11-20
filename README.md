@@ -44,7 +44,7 @@ as a pill, it keeps the art in view with a soft glow in the album's own colour, 
 Download something, record the screen or start a timer while music plays, and the second activity
 buds off into its own bubble, then melts back in when it's done. A second player does the same.
 
-<p align="center"><img src="docs/media/split.webp" alt="A download bubble, then a screen-recording bubble, splitting off the music pill and merging back in" width="640"></p>
+<p align="center"><img src="docs/media/split.webp" alt="Download, screen-recording and timer bubbles taking turns splitting off the music pill and merging back in" width="640"></p>
 
 ## Ask anything
 

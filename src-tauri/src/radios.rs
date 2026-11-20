@@ -106,6 +106,7 @@ mod imp {
     static ENTRIES: Mutex<Vec<Entry>> = Mutex::new(Vec::new());
     /// Names connected at the last publish (None until the first one: no
     /// "Connected" activity for devices that were already connected at startup).
+    static SEEN_BT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     static PREV_CONNECTED: Mutex<Option<Vec<String>>> = Mutex::new(None);
     static LAST_AIRPLANE: Mutex<Option<bool>> = Mutex::new(None);
 
@@ -116,6 +117,28 @@ mod imp {
         audio: bool,
         classic: Option<BluetoothDevice>,
         le: Option<BluetoothLEDevice>,
+    }
+
+    /// Waits for a Windows async call, but never forever. Some Bluetooth calls simply don't
+    /// return while the Bluetooth service is starting (sign-in), switching, or after a driver
+    /// hiccup; a plain `.get()` then hung that thread for good, and with it every later
+    /// refresh, leaving the island stuck on "Unavailable". Timed out calls are cancelled.
+    fn wait<T: windows_core::RuntimeType + 'static>(op: windows::core::Result<windows_future::IAsyncOperation<T>>, ms: u64) -> Option<T> {
+        use windows_future::AsyncStatus;
+        let op = op.ok()?;
+        let start = std::time::Instant::now();
+        loop {
+            match op.Status().ok()? {
+                AsyncStatus::Completed => return op.GetResults().ok(),
+                AsyncStatus::Started => {}
+                _ => return None, // error or cancelled
+            }
+            if start.elapsed() >= Duration::from_millis(ms) {
+                let _ = op.Cancel();
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(15));
+        }
     }
 
     fn com() {
@@ -134,8 +157,8 @@ mod imp {
     /* ---------- radios ---------- */
 
     fn load_radios() {
-        let _ = Radio::RequestAccessAsync().and_then(|op| op.get());
-        let list: Vec<Radio> = Radio::GetRadiosAsync().and_then(|op| op.get()).map(|v| v.into_iter().collect()).unwrap_or_default();
+        let _ = wait(Radio::RequestAccessAsync(), 4000);
+        let list: Vec<Radio> = wait(Radio::GetRadiosAsync(), 4000).map(|v| v.into_iter().collect()).unwrap_or_default();
         for r in &list {
             let _ = r.StateChanged(&TypedEventHandler::<Radio, IInspectable>::new(|sender: Ref<Radio>, _| {
                 if let Some(r) = sender.as_ref() {
@@ -168,12 +191,12 @@ mod imp {
         if let Some(r) = BT_RADIO.lock().ok().and_then(|g| g.clone()) {
             return Some(r);
         }
-        let adapter = BluetoothAdapter::GetDefaultAsync().and_then(|op| op.get()).ok();
+        let adapter = wait(BluetoothAdapter::GetDefaultAsync(), 4000);
         if let Ok(mut g) = BT_ADAPTER.lock() {
             *g = Some(adapter.is_some());
         }
         let r = adapter
-            .and_then(|a| a.GetRadioAsync().and_then(|op| op.get()).ok())
+            .and_then(|a| wait(a.GetRadioAsync(), 4000))
             .or_else(|| {
                 // Fall back to the system radio list, re-read in case it was read too early.
                 if let Ok(mut g) = RADIOS.lock() {
@@ -203,13 +226,11 @@ mod imp {
     pub fn set_radio(kind: RadioKind, on: bool) -> Result<(), String> {
         com();
         let name = if kind == RadioKind::Bluetooth { "Bluetooth" } else { "Wi-Fi" };
-        let _ = Radio::RequestAccessAsync().and_then(|op| op.get());
+        let _ = wait(Radio::RequestAccessAsync(), 4000);
         let r = if kind == RadioKind::Bluetooth { bt_radio() } else { radio(kind) };
         let r = r.ok_or_else(|| format!("Windows isn't showing a {name} radio right now. Open {name} settings to turn it on."))?;
-        let status = r
-            .SetStateAsync(if on { RadioState::On } else { RadioState::Off })
-            .and_then(|op| op.get())
-            .map_err(|e| e.to_string())?;
+        let status = wait(r.SetStateAsync(if on { RadioState::On } else { RadioState::Off }), 10_000)
+            .ok_or_else(|| format!("Windows didn't answer while switching {name}. Try again, or use {name} settings."))?;
         crate::log_line(format!("radio {name} -> {on}: access {:?}", status.0));
         if status == RadioAccessStatus::Allowed {
             Ok(())
@@ -245,7 +266,7 @@ mod imp {
         }
         let list: Vec<Radio> = RADIOS.lock().map(|g| g.clone()).unwrap_or_default();
         for r in list {
-            let _ = r.SetStateAsync(if on { RadioState::Off } else { RadioState::On }).and_then(|op| op.get());
+            let _ = wait(r.SetStateAsync(if on { RadioState::Off } else { RadioState::On }), 10_000);
         }
         Ok(())
     }
@@ -457,13 +478,20 @@ mod imp {
 
     /// Picks up newly paired / removed devices and subscribes to their connection events.
     fn enumerate_bt() {
+        static ONE: Mutex<()> = Mutex::new(());
+        let Ok(_one_at_a_time) = ONE.try_lock() else { return };
         let mut found: Vec<String> = Vec::new();
         let mut fresh: Vec<Entry> = Vec::new();
+        // Only forget devices when Windows actually answered both lists; a timed-out lookup
+        // must not wipe the device list (that read as "no Bluetooth").
+        let mut complete = true;
         // Devices we already hold open. Placeholders (listed by name only, because Windows
         // couldn't open them yet, e.g. Bluetooth was off) are tried again every round.
         let known: Vec<String> = ENTRIES.lock().map(|g| g.iter().filter(|e| e.classic.is_some() || e.le.is_some()).map(|e| e.id.clone()).collect()).unwrap_or_default();
         if let Ok(sel) = BluetoothDevice::GetDeviceSelectorFromPairingState(true) {
-            if let Ok(infos) = DeviceInformation::FindAllAsyncAqsFilter(&sel).and_then(|op| op.get()) {
+            let infos = wait(DeviceInformation::FindAllAsyncAqsFilter(&sel), 6000);
+            complete &= infos.is_some();
+            if let Some(infos) = infos {
                 for info in infos {
                     let Ok(id) = info.Id() else { continue };
                     let id_s = id.to_string();
@@ -471,7 +499,7 @@ mod imp {
                     if known.contains(&id_s) {
                         continue;
                     }
-                    let Ok(d) = BluetoothDevice::FromIdAsync(&id).and_then(|op| op.get()) else {
+                    let Some(d) = wait(BluetoothDevice::FromIdAsync(&id), 3000) else {
                         let name = friendly_name(info.Name().ok(), None);
                         if !name.is_empty() {
                             let audio = kind_of(&name, false) == "headphones";
@@ -503,7 +531,9 @@ mod imp {
             }
         }
         if let Ok(sel) = BluetoothLEDevice::GetDeviceSelectorFromPairingState(true) {
-            if let Ok(infos) = DeviceInformation::FindAllAsyncAqsFilter(&sel).and_then(|op| op.get()) {
+            let infos = wait(DeviceInformation::FindAllAsyncAqsFilter(&sel), 6000);
+            complete &= infos.is_some();
+            if let Some(infos) = infos {
                 for info in infos {
                     let Ok(id) = info.Id() else { continue };
                     let id_s = id.to_string();
@@ -511,7 +541,7 @@ mod imp {
                     if known.contains(&id_s) {
                         continue;
                     }
-                    let Ok(d) = BluetoothLEDevice::FromIdAsync(&id).and_then(|op| op.get()) else {
+                    let Some(d) = wait(BluetoothLEDevice::FromIdAsync(&id), 3000) else {
                         let name = friendly_name(info.Name().ok(), None);
                         if !name.is_empty() {
                             fresh.push(Entry { id: id_s, kind: kind_of(&name, false).into(), name, audio: false, classic: None, le: None });
@@ -532,7 +562,9 @@ mod imp {
             }
         }
         if let Ok(mut g) = ENTRIES.lock() {
-            g.retain(|e| found.contains(&e.id));
+            if complete {
+                g.retain(|e| found.contains(&e.id));
+            }
             for e in fresh {
                 match g.iter_mut().find(|x| x.id == e.id) {
                     // A placeholder is replaced once the device opens.
@@ -547,7 +579,13 @@ mod imp {
     fn compute_bt() -> BtState {
         let on = radio_on(RadioKind::Bluetooth);
         let has_adapter = BT_ADAPTER.lock().ok().and_then(|g| *g).unwrap_or(false);
-        let mut st = BtState { available: on.is_some() || has_adapter, on: on.unwrap_or(false), devices: vec![] };
+        if on.is_some() || has_adapter {
+            SEEN_BT.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        // Once this PC has shown a Bluetooth adapter it has one: a lookup that fails later
+        // (service restarting, driver busy) must not turn the tile into "Unavailable".
+        let seen = SEEN_BT.load(std::sync::atomic::Ordering::Relaxed);
+        let mut st = BtState { available: on.is_some() || has_adapter || seen, on: on.unwrap_or(false), devices: vec![] };
         // No readable radio state but a device is clearly connected: Bluetooth is on.
         let radio_unknown = on.is_none();
         let levels = crate::battery::levels();
@@ -555,21 +593,26 @@ mod imp {
             let n = name.to_lowercase();
             levels.iter().find(|(l, _)| l.to_lowercase() == n || l.to_lowercase().contains(&n)).map(|(_, v)| *v)
         };
-        if let Ok(g) = ENTRIES.lock() {
-            for e in g.iter() {
-                let connected = (st.on || radio_unknown)
-                    && match (&e.classic, &e.le) {
-                        (Some(d), _) => d.ConnectionStatus().ok() == Some(BluetoothConnectionStatus::Connected),
-                        (_, Some(d)) => d.ConnectionStatus().ok() == Some(BluetoothConnectionStatus::Connected),
-                        _ => false,
-                    };
-                // Merge the classic + LE halves of the same device.
-                if let Some(x) = st.devices.iter_mut().find(|x| x.name == e.name) {
-                    x.connected |= connected;
-                    continue;
-                }
-                st.devices.push(BtDevice { id: e.id.clone(), name: e.name.clone(), connected, kind: e.kind.clone(), battery: battery_for(&e.name), audio: e.audio });
+        // Copy the list out first: asking Windows about each device while holding the lock
+        // could block the device scan (and so every later refresh) behind one slow device.
+        let entries: Vec<(String, String, String, bool, Option<BluetoothDevice>, Option<BluetoothLEDevice>)> = ENTRIES
+            .lock()
+            .map(|g| g.iter().map(|e| (e.id.clone(), e.name.clone(), e.kind.clone(), e.audio, e.classic.clone(), e.le.clone())).collect())
+            .unwrap_or_default();
+        for (id, name, kind, audio, classic, le) in entries {
+            let connected = (st.on || radio_unknown)
+                && match (&classic, &le) {
+                    (Some(d), _) => d.ConnectionStatus().ok() == Some(BluetoothConnectionStatus::Connected),
+                    (_, Some(d)) => d.ConnectionStatus().ok() == Some(BluetoothConnectionStatus::Connected),
+                    _ => false,
+                };
+            // Merge the classic + LE halves of the same device.
+            if let Some(x) = st.devices.iter_mut().find(|x| x.name == name) {
+                x.connected |= connected;
+                continue;
             }
+            let battery = battery_for(&name);
+            st.devices.push(BtDevice { id, name, connected, kind, battery, audio });
         }
         st.devices.sort_by(|a, b| b.connected.cmp(&a.connected).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
         if radio_unknown && st.devices.iter().any(|d| d.connected) {
@@ -627,13 +670,24 @@ mod imp {
     }
 
     pub fn bluetooth() -> BtState {
+        // Opening the Controls tab asks for a fresh look every time (in the background);
+        // the cached state answers right away.
+        std::thread::spawn(|| {
+            com();
+            enumerate_bt();
+            publish_bt();
+        });
         if let Some(st) = BT.lock().ok().and_then(|g| g.clone()) {
             return st;
         }
-        com();
-        enumerate_bt();
-        publish_bt();
-        BT.lock().ok().and_then(|g| g.clone()).unwrap_or_default()
+        // First call: give the background look a moment to land.
+        for _ in 0..40 {
+            std::thread::sleep(Duration::from_millis(100));
+            if let Some(st) = BT.lock().ok().and_then(|g| g.clone()) {
+                return st;
+            }
+        }
+        BtState { available: SEEN_BT.load(std::sync::atomic::Ordering::Relaxed), ..Default::default() }
     }
 
     /// Connect / disconnect a Bluetooth audio device: find its audio endpoints, walk
@@ -708,14 +762,17 @@ mod imp {
             }));
             publish_wifi(false);
             publish_airplane();
-            enumerate_bt();
-            publish_bt();
+            let mut first = true;
             loop {
                 // Events do the real-time work; this only catches newly paired devices
                 // and anything an event might have missed. Each round runs on its own thread
                 // and is never waited on for long: a Windows Bluetooth call can hang (e.g. while
                 // the radio switches on), and that used to freeze the device list for good.
-                std::thread::sleep(Duration::from_secs(6));
+                // The first round runs right away, through the same guard.
+                if !first {
+                    std::thread::sleep(Duration::from_secs(6));
+                }
+                first = false;
                 let (tx, rx) = std::sync::mpsc::channel();
                 std::thread::spawn(move || {
                     com();

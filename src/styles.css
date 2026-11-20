@@ -889,7 +889,9 @@ button { font: inherit; color: inherit; }
 
 /* ---- Nearby sharing (LocalSend): device bubbles under the Shelf ---- */
 .nb-row { position: relative; flex-shrink: 0; height: 52px; margin: 0 -4px -6px; padding-top: 8px; border-top: 0.5px solid rgba(255, 255, 255, 0.09); display: flex; align-items: center; }
-.nb-list { display: flex; gap: 4px; overflow-x: auto; width: 100%; padding: 0 2px; scrollbar-width: none; }
+/* Room above and below for the 50px progress ring around a 34px avatar: a sideways
+   scroller clips vertically too, which cut the ring off. The negative margin keeps the row height. */
+.nb-list { display: flex; gap: 4px; overflow-x: auto; width: 100%; padding: 6px 2px; margin: -6px 0; scrollbar-width: none; }
 .nb-list::-webkit-scrollbar { display: none; }
 .nb-dev {
   position: relative; flex-shrink: 0; min-width: 0; max-width: 140px; border: 0; padding: 4px 12px 4px 4px; background: transparent; color: #fff;

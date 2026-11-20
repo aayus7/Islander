@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Islander · The Dynamic Island, now on Windows</title>
+<meta name="description" content="The most faithful 1:1 Dynamic Island for Windows 10 and 11. Free and open source.">
+<link rel="icon" href="media/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#08090c">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Islander · The Dynamic Island, now on Windows">
+<meta property="og:description" content="The most faithful 1:1 Dynamic Island for Windows 10 and 11. Free and open source.">
+<meta property="og:url" content="https://aayus7.github.io/islander/">
+<meta property="og:image" content="https://aayus7.github.io/islander/media/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://aayus7.github.io/islander/media/og.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* Islander: liquid chrome. One visual world (dark): black ground, white type, a chrome italic serif
+   for the single word that matters, and live liquid metal where the page needs a moment.
+   Layout: hero demo → film → feature rows (copy | real clip) → bento → the 1:1 claim → download. */
+:root {
+  --ground: #050506;
+  --panel: #0d0d11;
+  --panel-2: #131318;
+  --ink: #f5f5f7;
+  --mute: #a1a1aa;
+  --faint: #6b6b74;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --amber: #ff9f0a;
+  --display: "Geist", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --wrap: 1200px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--ground); scroll-behavior: smooth; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--display); font-size: 17px; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+img, video { max-width: 100%; display: block; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 8px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 600; letter-spacing: -0.045em; line-height: 1.02; }
+p { margin: 0; text-wrap: pretty; }
+.chrome {
+  font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; padding: 0 0.06em 0 0.02em;
+  background: linear-gradient(180deg, #ffffff 0%, #e4e4e7 38%, #8e8e96 62%, #d4d4d8 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.wrap { width: min(var(--wrap), 100% - 40px); margin-inline: auto; }
+
+/* ---------------- nav ---------------- */
+.nav { position: fixed; inset: 0 0 auto 0; z-index: 50; display: flex; justify-content: center; padding: 14px 20px; pointer-events: none; }
+.nav-in { pointer-events: auto; width: min(var(--wrap), 100%); display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px 12px 10px 16px; border-radius: 999px; transition: background 0.35s, box-shadow 0.35s, backdrop-filter 0.35s; }
+.nav.solid .nav-in { background: rgba(14, 14, 18, 0.72); box-shadow: 0 0 0 1px var(--line), 0 18px 40px -18px rgba(0, 0, 0, 0.8); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 600; letter-spacing: -0.03em; font-size: 19px; }
+.logo { width: 46px; height: 17px; border-radius: 99px; background: #000; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22); position: relative; flex: none; }
+.logo::after { content: ""; position: absolute; right: 3px; top: 3px; width: 11px; height: 11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffc672, var(--amber) 60%, #e67800); box-shadow: 0 0 10px rgba(255, 159, 10, 0.6); }
+.nav-links { display: flex; align-items: center; gap: 6px; }
+.nav-links a { text-decoration: none; color: var(--mute); font-size: 15px; padding: 8px 12px; border-radius: 99px; transition: color 0.2s, background 0.2s; }
+.nav-links a:hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 0 22px; border-radius: 99px; text-decoration: none; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; border: 0; cursor: pointer; font-family: inherit; transition: transform 0.25s cubic-bezier(.2,.8,.2,1), box-shadow 0.25s, background 0.25s; }
+.btn:active { transform: scale(0.97); }
+.btn-chrome { color: #0a0a0c; background: linear-gradient(180deg, #ffffff 0%, #e7e7ea 45%, #b9b9c0 100%); box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 10px 30px -10px rgba(255, 255, 255, 0.35); }
+.btn-chrome:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 16px 40px -10px rgba(255, 255, 255, 0.45); }
+.btn-ghost { color: var(--ink); background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-2); }
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.1); }
+.nav .btn { min-height: 40px; padding: 0 18px; font-size: 15px; }
+.win { width: 16px; height: 16px; flex: none; }
+
+/* ---------------- hero ---------------- */
+.hero { position: relative; overflow: hidden; padding: 150px 0 120px; isolation: isolate; }
+.metal { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; background: url(media/metal-fallback.jpg) center / cover; }
+.hero::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(70% 55% at 50% 42%, rgba(5, 5, 6, 0.15), rgba(5, 5, 6, 0.55) 70%), linear-gradient(180deg, rgba(5,5,6,0) 60%, var(--ground) 100%); }
+.hero-in { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 30px; }
+.hero { --x: 0; }
+.hero h1, .hero .lede, .hero .ctas, .hero .meta { opacity: calc(1 - 0.88 * var(--x)); transform: translateY(calc(var(--x) * 10px)) scale(calc(1 - 0.02 * var(--x))); will-change: opacity, transform; }
+.hero h1 { font-size: clamp(54px, 9.4vw, 132px); }
+.hero h1 .chrome { font-size: 1.12em; }
+.lede { max-width: 620px; color: rgba(245, 245, 247, 0.78); font-size: clamp(18px, 1.6vw, 21px); line-height: 1.5; }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; color: var(--mute); font-size: 14px; }
+.meta span { display: inline-flex; align-items: center; gap: 8px; }
+.meta span + span::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: var(--faint); margin-right: 10px; }
+
+/* the live island */
+.stage { position: relative; height: 190px; width: 100%; margin-bottom: 6px; z-index: 3; }
+@media (max-width: 720px) { .live { transform: translateX(-50%) scale(.82) !important; } .stage { height: 120px !important; } }
+.live { pointer-events: none; z-index: 5; position: absolute; left: 50%; top: -14px; width: 560px; height: 440px; border: 0; background: transparent; color-scheme: normal; transform: translateX(-50%) scale(1.25); transform-origin: top center; }
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 30px 70px -20px rgba(0, 0, 0, 0.9), 0 8px 24px rgba(0, 0, 0, 0.5); will-change: width, height; }
+.hint { position: absolute; top: 182px; left: 0; right: 0; text-align: center; color: var(--faint); font-size: 13px; letter-spacing: 0.02em; }
+.row { display: flex; align-items: center; gap: 14px; height: 100%; padding: 0 18px; }
+.av { width: 52px; height: 52px; border-radius: 50%; flex: none; object-fit: cover; }
+.t1 { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; color: #fff; line-height: 1.25; }
+.t2 { font-size: 14.5px; color: rgba(255, 255, 255, 0.62); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.5); font-weight: 600; }
+.split { display: flex; align-items: center; justify-content: space-between; height: 100%; padding: 0 16px 0 14px; }
+.ring { width: 26px; height: 26px; flex: none; }
+.num { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+.ad { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; height: 100%; }
+.ad-top { display: flex; align-items: center; gap: 12px; }
+.ad-icon { width: 40px; height: 40px; border-radius: 50%; background: #0a84ff; display: grid; place-items: center; flex: none; }
+.thumbs { display: flex; gap: 6px; }
+.thumbs img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; }
+.ad-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ad-btns span { height: 34px; border-radius: 99px; display: grid; place-items: center; font-weight: 600; font-size: 14.5px; }
+.ad-btns .no { background: #2c2c2e; } .ad-btns .yes { background: #0a84ff; }
+.pods { width: 30px; height: 30px; flex: none; }
+
+/* ---------------- sections ---------------- */
+section { position: relative; }
+.kicker { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mute); font-weight: 600; }
+.sec-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; margin-bottom: 72px; }
+.sec-head h2 { font-size: clamp(42px, 6vw, 84px); }
+.sec-head p { color: var(--mute); max-width: 560px; font-size: 19px; }
+
+/* film */
+[hidden] { display: none !important; }
+.film { padding: 40px 0 140px; scroll-margin-top: 50px; }
+.film-card { position: relative; border-radius: 28px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; box-shadow: 0 0 0 1px var(--line-2), 0 60px 120px -40px rgba(0, 0, 0, 0.9); }
+.film-card video, .film-card img { width: 100%; height: 100%; object-fit: cover; }
+.play { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(60% 60% at 50% 50%, rgba(0,0,0,0.05), rgba(0,0,0,0.45)); border: 0; cursor: pointer; color: #fff; font-family: inherit; }
+.play-in { display: flex; align-items: center; gap: 14px; padding: 14px 26px 14px 16px; border-radius: 99px; background: rgba(20, 20, 24, 0.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; font-size: 17px; transition: transform 0.3s cubic-bezier(.2,.8,.2,1); }
+.play:hover .play-in { transform: scale(1.04); }
+.play-dot { width: 46px; height: 46px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
+
+/* feature rows */
+.features { padding: 40px 0 60px; }
+.feat { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(28px, 5vw, 72px); align-items: center; padding: 56px 0; }
+.feat.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.feat.flip .copy { order: 2; }
+.copy { display: flex; flex-direction: column; gap: 18px; }
+.copy h3 { font-size: clamp(36px, 4.2vw, 60px); }
+.copy h3 .chrome { font-size: 1.1em; }
+.copy p { color: var(--mute); font-size: 18px; max-width: 460px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 13.5px; color: var(--ink); padding: 6px 12px; border-radius: 99px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); }
+kbd { font-family: var(--display); font-size: 13.5px; padding: 4px 9px; border-radius: 8px; background: #1c1c21; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--line-2); }
+.screen { position: relative; border-radius: 26px; overflow: hidden; background: #0b0d18; box-shadow: 0 0 0 1px var(--line-2), 0 50px 100px -40px rgba(0, 0, 0, 0.95), 0 20px 40px -20px rgba(0, 0, 0, 0.6); }
+.screen::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 28%); }
+.screen { max-width: 680px; justify-self: center; width: 100%; }
+.screen img { width: 100%; height: auto; }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .rise { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% cover 32%; }
+    @keyframes rise { from { opacity: 0.5; transform: translateY(56px) scale(0.965); } to { opacity: 1; transform: none; } }
+  }
+}
+
+/* bento */
+.bento { padding: 60px 0 140px; }
+.grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+.tile { grid-column: span 2; background: linear-gradient(180deg, var(--panel-2), var(--panel)); border-radius: 26px; box-shadow: inset 0 0 0 1px var(--line); padding: 26px; display: flex; flex-direction: column; gap: 18px; overflow: hidden; }
+.tile.wide { grid-column: span 3; }
+.tile h4 { margin: 0; font-size: 24px; letter-spacing: -0.035em; font-weight: 600; line-height: 1.1; }
+.tile p { color: var(--mute); font-size: 15.5px; }
+.tile .shot { margin-top: auto; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); background: #0b0d18; }
+.tile .shot img { width: 100%; height: auto; }
+
+/* claim */
+.claim { padding: 40px 0 150px; }
+.claim h2 { font-size: clamp(48px, 7.4vw, 110px); text-align: center; }
+.claim h2 .chrome { font-size: 1.18em; }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 80px; }
+.fact { padding: 26px 24px; border-radius: 22px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 10px; }
+.fact b { font-size: 18px; letter-spacing: -0.02em; }
+.fact span { color: var(--mute); font-size: 15px; line-height: 1.5; }
+.fact svg { width: 28px; height: 28px; color: #fff; opacity: 0.9; }
+
+/* download */
+.get { position: relative; overflow: hidden; isolation: isolate; padding: 150px 0; border-top: 1px solid var(--line); }
+.get .metal { opacity: 0.9; }
+.get::after { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(60% 70% at 50% 50%, rgba(5,5,6,0.25), rgba(5,5,6,0.8)), linear-gradient(180deg, var(--ground), rgba(5,5,6,0) 22%, rgba(5,5,6,0) 78%, var(--ground)); }
+.get-in { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
+.get h2 { font-size: clamp(46px, 7vw, 104px); }
+.get .btn-chrome { min-height: 58px; padding: 0 32px; font-size: 18px; }
+
+footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--faint); font-size: 14px; }
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px 32px; align-items: center; }
+.foot nav { display: flex; gap: 22px; flex-wrap: wrap; }
+.foot a { color: var(--mute); text-decoration: none; }
+.foot a:hover { color: var(--ink); }
+.legal { margin-top: 20px; color: var(--faint); font-size: 13px; max-width: 760px; }
+
+@media (max-width: 900px) {
+  .nav-links a.hide-s { display: none; }
+  .feat, .feat.flip { grid-template-columns: 1fr; padding: 40px 0; }
+  .feat.flip .copy { order: 0; }
+  .tile, .tile.wide { grid-column: span 6; }
+  .facts { grid-template-columns: 1fr 1fr; }
+  .hero { padding-top: 120px; }
+}
+@media (max-width: 560px) {
+  .nav-links a:not(.btn) { display: none; }
+  .facts { grid-template-columns: 1fr; }
+  .stage { height: 150px; transform: scale(0.78); transform-origin: top center; }
+  .hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top" aria-label="Islander, back to top"><span class="logo" aria-hidden="true"></span>Islander</a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#film" class="hide-s">Film</a>
+      <a href="#features">Features</a>
+      <a href="#craft" class="hide-s">1:1</a>
+      <a href="https://github.com/aayus7/Islander">GitHub</a>
+      <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/latest">Download</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <canvas class="metal" id="metal-hero" aria-hidden="true"></canvas>
+    <div class="wrap hero-in">
+      <div class="stage">
+        <iframe class="live" src="island.html" title="The real Islander island, running live: hover it to open it, click Accept when a phone shares photos" scrolling="no"></iframe>
+      </div>
+      <h1 id="hero-title">The Dynamic Island.<br>Now on <span class="chrome">Windows.</span></h1>
+      <p class="lede">The most faithful 1:1 Dynamic Island for Windows 10 and 11. Every spring, morph and cover flip from the iPhone, rebuilt for your desktop.</p>
+      <div class="ctas">
+        <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/latest"><svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 2.3 6.5 1.4v6.2H0zm7.3-1L16 0v7.6H7.3zM0 8.4h6.5v6.2L0 13.7zm7.3 0H16V16l-8.7-1.2z"/></svg>Download for Windows</a>
+        <a class="btn btn-ghost" href="#film">Watch the film</a>
+      </div>
+      <div class="meta"><span>Free</span><span>Open source</span><span>Version 0.9.1</span><span>Windows 10 &amp; 11</span></div>
+    </div>
+  </section>
+
+  <section class="film" id="film" aria-label="Trailer">
+    <div class="wrap">
+      <div class="film-card rise">
+        <video id="film-video" preload="none" poster="media/trailer-poster.jpg" playsinline controls hidden><source src="media/trailer.mp4" type="video/mp4"></video>
+        <img id="film-poster" src="media/trailer-poster.jpg" alt="A frame from the Islander trailer: the music island floating over liquid metal">
+        <button class="play" id="film-play" type="button" aria-label="Play the Islander trailer, 72 seconds">
+          <span class="play-in"><span class="play-dot"><svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><path d="M2 1.5v15L15 9z" fill="#000"/></svg></span>Watch the film · 1:12</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="kicker">Recorded on Windows 11</span>
+        <h2 id="features-title">Everything the island <span class="chrome">does.</span></h2>
+        <p>Every clip on this page is the real app, captured on a real desktop.</p>
+      </div>
+
+      <article class="feat">
+        <div class="copy">
+          <span class="kicker">Now Playing</span>
+          <h3>Your music, <span class="chrome">alive.</span></h3>
+          <p>Real album art, a waveform that follows the actual audio, a scrubber you can drag and one tap to switch between apps that are playing.</p>
+          <div class="chips"><span class="chip">Spotify</span><span class="chip">YouTube</span><span class="chip">mpv</span><span class="chip">Stremio</span><span class="chip">Any media app</span></div>
+        </div>
+        <div class="screen rise"><img src="media/music.webp" width="640" height="280" alt="Hovering the island while Spotify plays: it opens to a player, scrubs, and switches to YouTube" loading="lazy"></div>
+      </article>
+
+      <article class="feat flip">
+        <div class="copy">
+          <span class="kicker">Cover flip</span>
+          <h3>Skip, and watch it <span class="chrome">turn.</span></h3>
+          <p>The cover turns on its axis, blurs and lands sharp, exactly like iOS. Tucked away as a pill it turns too, glowing in the colour of each album.</p>
+        </div>
+        <div class="screen rise"><img src="media/music-skip.webp" width="640" height="280" alt="Skipping tracks: each new cover turns into place" loading="lazy"></div>
+      </article>
+
+      <article class="feat">
+        <div class="copy">
+          <span class="kicker">Search or Ask</span>
+          <h3>Ask <span class="chrome">anything.</span></h3>
+          <p>Press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Space</kbd> and the island becomes a search bar. Type or speak, and get a short answer with its sources from live web, news and sports results.</p>
+          <div class="chips"><span class="chip">No account</span><span class="chip">No API key</span><span class="chip">Voice</span><span class="chip">Follow-ups</span></div>
+        </div>
+        <div class="screen rise"><img src="media/ai.webp" width="640" height="250" alt="Typing a question into the island and getting an answer with sources" loading="lazy"></div>
+      </article>
+
+      <article class="feat flip">
+        <div class="copy">
+          <span class="kicker">Nearby sharing</span>
+          <h3>Share with your <span class="chrome">phone.</span></h3>
+          <p>iPhone and Android phones running LocalSend show up right in the island. Accept photos with one click, watch them arrive, and send files back from the Shelf. Nothing leaves your Wi‑Fi.</p>
+          <div class="chips"><span class="chip">iPhone</span><span class="chip">Android</span><span class="chip">Other PCs</span></div>
+        </div>
+        <div class="screen rise"><img src="media/airdrop.webp" width="640" height="360" alt="A phone offers three photos, they are accepted, arrive, and are sent on to another phone from the Shelf" loading="lazy"></div>
+      </article>
+
+      <article class="feat">
+        <div class="copy">
+          <span class="kicker">Notifications</span>
+          <h3>Messages, <span class="chrome">beautifully.</span></h3>
+          <p>Windows notifications arrive as island banners, with the sender’s profile picture and any image they sent. Swipe one away, or click it to open the app.</p>
+          <div class="chips"><span class="chip">Discord</span><span class="chip">WhatsApp</span><span class="chip">Every app</span></div>
+        </div>
+        <div class="screen rise"><img src="media/discord.webp" width="640" height="110" alt="Discord messages dropping out of the island with profile pictures" loading="lazy"></div>
+      </article>
+
+      <article class="feat flip">
+        <div class="copy">
+          <span class="kicker">Downloads</span>
+          <h3>Every download, <span class="chrome">at a glance.</span></h3>
+          <p>Progress, speed and time left for your browser, Internet Download Manager and Mister Download Manager. Hover for the full list, or click a finished file to open its folder.</p>
+          <div class="chips"><span class="chip">Browsers</span><span class="chip">IDM</span><span class="chip">MDM</span></div>
+        </div>
+        <div class="screen rise"><img src="media/downloads.webp" width="640" height="260" alt="Two downloads with live progress and speed, then a completion banner" loading="lazy"></div>
+      </article>
+
+      <article class="feat">
+        <div class="copy">
+          <span class="kicker">Weather</span>
+          <h3>Weather that <span class="chrome">moves.</span></h3>
+          <p>Falling snow, drifting clouds and rain behind the temperature, an hourly strip and a 7-day forecast, styled after iOS Weather.</p>
+        </div>
+        <div class="screen rise"><img src="media/weather.webp" width="640" height="390" alt="The weather tab with falling snow, scrolled to the 7-day forecast" loading="lazy"></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="bento" aria-labelledby="more-title">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="more-title">And so much <span class="chrome">more.</span></h2>
+      </div>
+      <div class="grid">
+        <div class="tile wide rise"><h4>Even when it’s tucked away</h4><p>A small pill with the cover, a glow in its colour and a live waveform.</p><div class="shot"><img src="media/music-compact.webp" width="520" height="64" alt="The collapsed music pill turning its cover on a skip" loading="lazy"></div></div>
+        <div class="tile wide rise"><h4>Connected, in 3D</h4><p>AirPods and Beats spin into view with their battery.</p><div class="shot"><img src="media/airpods.webp" width="520" height="104" alt="AirPods Pro connecting with a 3D animation" loading="lazy"></div></div>
+        <div class="tile rise"><h4>Live Activities</h4><p>Timers, stopwatches and focus sessions stay with you.</p><div class="shot"><img src="media/timer.webp" width="640" height="240" alt="A timer starting and turning into a live pill" loading="lazy"></div></div>
+        <div class="tile rise"><h4>Volume and brightness</h4><p>The Windows pop-ups, replaced. Plus Silent and Caps Lock.</p><div class="shot"><img src="media/hud.webp" width="520" height="64" alt="Volume, Silent, brightness and Caps Lock pills" loading="lazy"></div></div>
+        <div class="tile rise"><h4>Know when you’re on</h4><p>Camera and microphone dots, right where iPhone puts them.</p><div class="shot"><img src="media/privacy.webp" width="520" height="70" alt="Microphone and camera dots beside the island" loading="lazy"></div></div>
+        <div class="tile wide rise" style="grid-column: span 6"><h4>Everything, one hover away</h4><p>Control Center, calendar, notes and to-dos, a file shelf, clipboard history and system stats. Scroll to move between them, and turn off or reorder any.</p><div class="shot"><img src="media/tour.webp" width="640" height="380" alt="Scrolling through every tab of the island" loading="lazy"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="claim" id="craft" aria-labelledby="claim-title">
+    <div class="wrap">
+      <h2 id="claim-title">Not a look-alike.<br>A <span class="chrome">1:1</span> Dynamic Island.</h2>
+      <div class="facts">
+        <div class="fact rise"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M14 4c7 0 10 3 10 10s-3 10-10 10S4 21 4 14 7 4 14 4Z"/></svg><b>Continuous curves</b><span>A true squircle outline that becomes a perfect capsule when it collapses.</span></div>
+        <div class="fact rise"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 20c4 0 5-12 9-12s4 8 7 8 3-4 6-4"/></svg><b>iOS springs</b><span>SwiftUI-style springs that keep their momentum when you change your mind mid-animation.</span></div>
+        <div class="fact rise"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3.5" y="6" width="21" height="15" rx="2.5"/><path d="M10 25h8" stroke-linecap="round"/></svg><b>Out of your way</b><span>Never steals focus, stays out of Alt+Tab and steps aside for fullscreen games and video.</span></div>
+        <div class="fact rise"><svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 9-5 5 5 5M18 9l5 5-5 5"/></svg><b>Open source</b><span>Free under the GPL-3.0. Every line is on GitHub, and updates are signed.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="get" id="download" aria-labelledby="get-title">
+    <canvas class="metal" id="metal-get" aria-hidden="true"></canvas>
+    <div class="wrap get-in">
+      <h2 id="get-title">Put an island on<br>your <span class="chrome">desktop.</span></h2>
+      <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/latest"><svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 2.3 6.5 1.4v6.2H0zm7.3-1L16 0v7.6H7.3zM0 8.4h6.5v6.2L0 13.7zm7.3 0H16V16l-8.7-1.2z"/></svg>Download for Windows</a>
+      <div class="meta"><span>Free</span><span>Windows 10 &amp; 11 · 64-bit</span><span>Updates itself</span></div>
+      <div class="ctas">
+        <a class="btn btn-ghost" href="https://github.com/aayus7/Islander">View on GitHub</a>
+        <a class="btn btn-ghost" href="https://ko-fi.com/aayus7">Support on Ko-fi</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <a class="brand" href="#top"><span class="logo" aria-hidden="true"></span>Islander</a>
+      <nav aria-label="Footer">
+        <a href="https://github.com/aayus7/Islander/releases/latest">Download</a>
+        <a href="https://github.com/aayus7/Islander">GitHub</a>
+        <a href="https://github.com/aayus7/Islander/blob/main/LICENSE">License</a>
+        <a href="https://ko-fi.com/aayus7">Ko-fi</a>
+      </nav>
+    </div>
+    <p class="legal">Islander is free software under the GPL-3.0. It is an independent project, not affiliated with or endorsed by Apple. Dynamic Island, iPhone and AirPods are trademarks of Apple Inc.; Windows is a trademark of Microsoft.</p>
+  </div>
+</footer>
+
+<script>
+  /* ---------- the live island: real app UI in a frame; the page stays clickable around it ---------- */
+  (() => {
+    const fr = document.querySelector('iframe.live'), hero = document.querySelector('.hero');
+    if (!fr) return;
+    let rect = null;
+    const map = (e) => { const b = fr.getBoundingClientRect(), k = b.width / 560; return [(e.clientX - b.left) / k, (e.clientY - b.top) / k]; };
+    // The headline steps back while someone has the island open. It follows the island's
+    // drawn height frame by frame, so it moves with the real spring both ways.
+    let engaged = false, target = 0, shown = 0, settle = 0, raf = 0, last = 0;
+    const step = (now) => {
+      const dt = Math.min(64, now - (last || now)); last = now;
+      shown += (target - shown) * (1 - Math.exp(-dt / 70));   // ~70 ms spring toward the island
+      if (Math.abs(target - shown) < 0.002) shown = target;
+      hero.style.setProperty('--x', shown.toFixed(3));
+      raf = shown === target ? 0 : requestAnimationFrame(step);
+      if (!raf) last = 0;
+    };
+    const set = (x) => { target = x; if (!raf) raf = requestAnimationFrame(step); };
+    addEventListener('message', (e) => {
+      if (e.source !== fr.contentWindow || !e.data || !e.data.island) return;
+      if (e.data.rect) {
+        rect = e.data.rect;
+        fr.style.pointerEvents = e.data.hover ? 'auto' : 'none';
+      }
+      if (e.data.hover) { engaged = true; clearTimeout(settle); }
+      if (typeof e.data.shape === 'number') {
+        const t = Math.min(1, Math.max(0, (e.data.shape - 48) / 64));
+        if (t === 0 && !e.data.hover) engaged = false;
+        // after the pointer leaves, the headline only comes back (never dims again)
+        set(!engaged ? 0 : e.data.hover ? t : Math.min(target, t));
+        clearTimeout(settle);
+        // the island came to rest somewhere other than idle (a banner): finish coming back
+        if (!e.data.hover && target > 0) settle = setTimeout(() => { engaged = false; set(0); }, 160);
+      }
+    });
+    addEventListener('pointermove', (e) => {
+      const [x, y] = map(e);
+      fr.contentWindow.postMessage({ pt: [x, y] }, '*');
+      const pad = 6, inside = rect && x >= rect.x - pad && x <= rect.x + rect.w + pad && y >= rect.y - pad && y <= rect.y + rect.h + pad;
+      fr.style.pointerEvents = inside ? 'auto' : 'none';
+    }, { passive: true });
+  })();
+
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- nav goes solid after the hero starts scrolling ---------- */
+  const nav = document.getElementById("nav");
+  const onScroll = () => nav.classList.toggle("solid", scrollY > 40);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- the trailer ---------- */
+  const fv = document.getElementById("film-video"), fp = document.getElementById("film-play"), po = document.getElementById("film-poster");
+  fp.addEventListener("click", () => {
+    fv.hidden = false; po.hidden = true; fp.hidden = true;
+    fv.play().catch(() => {});
+  });
+  fv.addEventListener("ended", () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    fv.hidden = true; po.hidden = false; fp.hidden = false;
+    fp.querySelector(".play-in").lastChild.textContent = "Watch again";
+    fv.currentTime = 0;
+  });
+
+  /* ---------- liquid metal (WebGL): flowing chrome with a hint of dispersion ---------- */
+  const FRAG = `
+precision highp float;
+uniform vec2 R; uniform float T; uniform vec2 M; uniform float S;
+float h21(vec2 p){ p = fract(p*vec2(123.34,456.21)); p += dot(p,p+45.32); return fract(p.x*p.y); }
+float n2(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(h21(i),h21(i+vec2(1,0)),u.x), mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),u.x), u.y); }
+float fbm(vec2 p){ float a=.5, s=0.; for(int i=0;i<4;i++){ s+=a*n2(p); p=p*2.03+vec2(1.7,9.2); a*=.5; } return s; }
+float height(vec2 p){
+  vec2 q = vec2(fbm(p*.8 + vec2(0., T*.03)), fbm(p*.8 + vec2(5.2,1.3) - T*.025));
+  vec2 w = vec2(fbm(p + 1.6*q + vec2(1.7,9.2) + T*.04), fbm(p + 1.6*q + vec2(8.3,2.8) - T*.035));
+  float h = fbm(p*.7 + 1.9*w);
+  float d = length(p - M); h += .08*exp(-d*d*30.);
+  return h;
+}
+vec3 env(vec3 r){
+  float key = pow(max(dot(r, normalize(vec3(.55,.62,.56))),0.), 14.);
+  float fill = pow(max(dot(r, normalize(vec3(-.7,-.35,.6))),0.), 6.)*.35;
+  float strip = smoothstep(.05,.0,abs(r.x*.8 + r.y*.35 + .12))*.75;
+  float sky = .035 + .05*max(r.y,0.);
+  return vec3(sky) + vec3(1.,.97,.92)*key*1.6 + vec3(.75,.85,1.)*fill + vec3(.95)*strip;
+}
+void main(){
+  vec2 uv = (gl_FragCoord.xy - .5*R) / R.y;
+  vec2 p = uv*.62 + vec2(.0,.05);
+  float e = .0035;
+  float h = height(p), hx = height(p+vec2(e,0.)), hy = height(p+vec2(0.,e));
+  vec2 g = vec2(hx-h, hy-h)/e;
+  vec3 col = vec3(0.);
+  for (int c=0;c<3;c++){
+    float k = S * (1. + float(c)*.045);
+    vec3 n = normalize(vec3(-g*k, 1.));
+    vec3 r = reflect(vec3(0.,0.,-1.), n);
+    vec3 v = env(r);
+    if (c==0) col.r = v.r; else if (c==1) col.g = v.g; else col.b = v.b;
+  }
+  col = mix(vec3(.012,.014,.025), col, .96);
+  col += vec3(.02,.025,.05)*(1.-col);
+  col = col/(1.+col*.55)*1.35;
+  col = pow(col, vec3(1.02,1.0,.97));
+  gl_FragColor = vec4(col, 1.);
+}`;
+  const VERT = "attribute vec2 a; void main(){ gl_Position = vec4(a,0.,1.); }";
+
+  function metal(canvas, opts) {
+    let gl;
+    try { gl = canvas.getContext("webgl", { antialias: false, alpha: false, powerPreference: "low-power" }); } catch (e) { gl = null; }
+    if (!gl) return; // the CSS image stays as the fallback
+    const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
+    const vs = sh(gl.VERTEX_SHADER, VERT), fs = sh(gl.FRAGMENT_SHADER, FRAG);
+    if (!vs || !fs) return;
+    const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return;
+    gl.useProgram(pr);
+    const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const uR = gl.getUniformLocation(pr, "R"), uT = gl.getUniformLocation(pr, "T"), uM = gl.getUniformLocation(pr, "M"), uS = gl.getUniformLocation(pr, "S");
+    const scale = Math.min(window.devicePixelRatio || 1, 1.5) * 0.55;
+    let mx = 0.6, my = 0.3, tx = mx, ty = my, visible = true, t0 = performance.now() - (opts.offset || 0);
+    function size() { const w = canvas.clientWidth, h = canvas.clientHeight; canvas.width = Math.max(2, w * scale | 0); canvas.height = Math.max(2, h * scale | 0); gl.viewport(0, 0, canvas.width, canvas.height); }
+    size(); addEventListener("resize", size);
+    canvas.parentElement.addEventListener("pointermove", (ev) => {
+      const r = canvas.getBoundingClientRect();
+      tx = ((ev.clientX - r.left) - r.width / 2) / r.height * .62; ty = -(((ev.clientY - r.top) - r.height / 2) / r.height * .62) + 0.05;
+    });
+    new IntersectionObserver((es) => { visible = es[0].isIntersecting; if (visible && !reduce) requestAnimationFrame(draw); }).observe(canvas);
+    function draw(now) {
+      mx += (tx - mx) * 0.04; my += (ty - my) * 0.04;
+      gl.uniform2f(uR, canvas.width, canvas.height);
+      gl.uniform1f(uT, reduce ? 12.0 : (now - t0) / 1000);
+      gl.uniform2f(uM, mx, my);
+      gl.uniform1f(uS, opts.slope || 0.55);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (visible && !reduce) requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+  }
+  metal(document.getElementById("metal-hero"), { slope: 0.42 });
+  metal(document.getElementById("metal-get"), { slope: 0.42, offset: 40000 });
+})();
+</script>
+</body>
+</html>

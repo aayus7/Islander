@@ -1,6 +1,7 @@
 node_modules
 dist
 dist-preview
+dist-hero
 src-tauri/target
 src-tauri/gen
 release

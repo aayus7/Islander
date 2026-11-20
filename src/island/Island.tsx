@@ -820,8 +820,11 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
 
   // Bubble centre relative to the island's centre line (top/bottom: to the right of the
   // pill; side edges: below it). It grows out of the island as bp goes 0 → 1.
+  // In the right-hand corner of the top/bottom edge it buds off to the left instead, toward
+  // the screen rather than off its edge.
   const stackV = side;
-  const bubbleCx = useTransform(() => (stackV ? 0 : w.get() / 2 + GAP + BUBBLE / 2 - (GAP + BUBBLE) * (1 - bp.get())));
+  const bubbleSign = !side && along === "end" ? -1 : 1;
+  const bubbleCx = useTransform(() => (stackV ? 0 : bubbleSign * (w.get() / 2 + GAP + BUBBLE / 2 - (GAP + BUBBLE) * (1 - bp.get()))));
   const bubbleCy = useTransform(() => (stackV ? TOP + h.get() + GAP + BUBBLE / 2 - (GAP + BUBBLE) * (1 - bp.get()) : TOP + BUBBLE / 2));
   const bubbleX = useTransform(bubbleCx, (cx) => cx - BUBBLE / 2);
   const bubbleY = useTransform(bubbleCy, (cy) => cy - BUBBLE / 2);
@@ -851,9 +854,11 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       ? null
       : side
         ? { x: (origin.x + (target.w - BUBBLE) / 2) * s, y: (origin.y + target.h + GAP) * s, w: BUBBLE * s, h: BUBBLE * s }
-        : { x: (origin.x + target.w + GAP) * s, y: origin.y * s, w: BUBBLE * s, h: BUBBLE * s };
+        : along === "end"
+          ? { x: (origin.x - GAP - BUBBLE) * s, y: origin.y * s, w: BUBBLE * s, h: BUBBLE * s }
+          : { x: (origin.x + target.w + GAP) * s, y: origin.y * s, w: BUBBLE * s, h: BUBBLE * s };
     bridge.setHitRects(island, bubble);
-  }, [target.w, target.h, split, side, sizeScale, attached, tucked, origin.x, origin.y, below, above]);
+  }, [target.w, target.h, split, side, along, sizeScale, attached, tucked, origin.x, origin.y, below, above]);
 
   // One-time prompt per browser: media playing in a browser without the extension connected
   // → point to the store page (tab titles, live streams and downloads need it).
@@ -1334,7 +1339,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       )}
 
       {/* Camera/mic dot: in the middle of the idle island, beside it otherwise. */}
-      {settings.privacyDots && !side && <PrivacyDots islandW={w} islandH={h} split={split} centered={mode === "idle" && !tucked} attached={attached} />}
+      {settings.privacyDots && !side && <PrivacyDots islandW={w} islandH={h} split={split} flip={along === "end"} centered={mode === "idle" && !tucked} attached={attached} />}
       </motion.div>
     </div>
   );

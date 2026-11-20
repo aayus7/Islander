@@ -16,12 +16,15 @@ export function PrivacyDots({
   islandW,
   islandH,
   split,
+  flip = false,
   centered,
   attached,
 }: {
   islandW: MotionValue<number>;
   islandH: MotionValue<number>;
   split: boolean;
+  /** In the right-hand corner: sit to the left of the island (and its bubble). */
+  flip?: boolean;
   centered: boolean;
   /** The waterdrop notch: its black area starts at the very top of the screen. */
   attached: boolean;
@@ -31,7 +34,7 @@ export function PrivacyDots({
   // 0 = centred in the island, 1 = beside it. Sprung, so it glides between the two.
   const side = useSpring(centered ? 0 : 1, { stiffness: 380, damping: 32 });
   useEffect(() => side.set(centered ? 0 : 1), [centered, side]);
-  const x = useTransform(() => side.get() * (islandW.get() / 2 + (split ? 37 + 10 + 11.5 : 11.5)));
+  const x = useTransform(() => (flip ? -1 : 1) * side.get() * (islandW.get() / 2 + (split ? 37 + 10 + 11.5 : 11.5)));
   const y = useTransform(() => {
     // Centre of the visible black shape (the notch also covers the gap above the island).
     const mid = attached ? (TOP + islandH.get()) / 2 : TOP + islandH.get() / 2;

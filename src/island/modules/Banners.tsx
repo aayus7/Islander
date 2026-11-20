@@ -48,10 +48,22 @@ const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 export function pushBanner(b: Omit<BannerData, "at" | "ttl"> & { ttl?: number }) {
   if (queue.some((q) => q.id === b.id)) return;
-  // An alarm goes ahead of ordinary notifications that are waiting.
+  // A new message (WhatsApp, Discord, Telegram…) takes over right away, like a chat on
+  // iPhone: the banner on screen is replaced instead of the message waiting for it to time
+  // out. Everything else queues as before, and an alarm (timer / focus) goes ahead of
+  // ordinary banners that are waiting. Nothing replaces an alarm that's on screen.
   const item = { ttl: 5200, ...b, at: Date.now(), pushed: Date.now() };
-  queue = isUrgent(item) ? [...queue.filter(isUrgent), item, ...queue.filter((q) => !isUrgent(q))] : [...queue, item];
-  queue = queue.slice(0, 6);
+  const head = queue[0];
+  if (isUrgent(item)) {
+    queue = [...queue.filter(isUrgent), item, ...queue.filter((q) => !isUrgent(q))];
+  } else if (isMessage(item) && !(head && isUrgent(head))) {
+    // The one being shown is replaced; anything still waiting unseen stays queued behind.
+    queue = [item, ...queue.slice(head && showing ? 1 : 0)];
+  } else {
+    queue = [...queue, item];
+  }
+  // At most six: drop the oldest waiting one, never the one on screen.
+  while (queue.length > 6) queue = [queue[0], ...queue.slice(2)];
   emit();
 }
 /** Show this one right now, ahead of anything waiting. */
@@ -81,6 +93,9 @@ export function setBannerShowing(v: boolean) {
     emit();
   }
 }
+/** A chat message: from a messaging app, or any notification with a sender's picture. */
+const MESSAGING = /whatsapp|discord|telegram|messenger|signal|slack|teams|instagram|wechat|\bline\b|viber|skype|messages|imessage|snapchat|\belement\b|beeper/i;
+export const isMessage = (b: BannerData) => !b.glyph && (!!b.avatar || MESSAGING.test(b.app) || MESSAGING.test(b.aumid ?? ""));
 /** Alerts that must be seen: they show even over an open panel or Search or Ask. */
 export const isUrgent = (b: BannerData | null | undefined) => !!b && (b.glyph === "timer" || b.glyph === "focus");
 setInterval(() => {

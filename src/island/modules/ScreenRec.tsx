@@ -37,6 +37,12 @@ function Dot({ s, size = 10 }: { s: RecState; size?: number }) {
   );
 }
 
+/** The second-activity bubble while recording next to music: the breathing red dot. */
+export function RecMinimal() {
+  const s = useScreenRec();
+  return <Dot s={s} size={12} />;
+}
+
 /** Big countdown digit that drops in, iOS-style. */
 function Count({ n, size }: { n: number; size: number }) {
   return (

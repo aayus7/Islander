@@ -3,6 +3,7 @@ Islander 0.9.3
 Smoother
 - A second live activity (a timer next to your music, a download, a second player) now grows out from behind the island into its own bubble and melts back in, with no seam. Its number and ring sharpen into view once it's free.
 - In the right-hand corner of the screen the bubble buds off to the left, toward the screen.
+- Recording the screen while music plays keeps your music in the island; the recording shows as a red bubble beside it (click it for Pause / Stop).
 - Picking up the island pops it up; letting go glides it into place in one motion, with no flash. It no longer springs open under the cursor right after you drop it.
 
 On every edge

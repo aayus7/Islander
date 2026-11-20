@@ -93,6 +93,13 @@ function fail(error: string) {
   timers.push(window.setTimeout(() => set({ phase: "idle", error: null }), 400));
 }
 
+/** Showcase stage only: put the recorder straight into recording / idle (no countdown, no
+ *  saved banner), so a scene can show the recording bubble coming and going. */
+export function showcaseRec(on: boolean) {
+  clearTimers();
+  set(on ? { phase: "recording", count: 0, elapsedMs: 0, error: null } : { phase: "idle", count: 0, elapsedMs: 0, error: null });
+}
+
 /** 3, 2, 1… then record (iPhone's Screen Recording). Tapping again during the countdown cancels. */
 export function startRecording() {
   wire();

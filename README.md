@@ -41,10 +41,10 @@ as a pill, it keeps the art in view with a soft glow in the album's own colour, 
 
 <p align="center"><img src="docs/media/music-compact.webp" alt="The collapsed music pill with the cover flip and glow" width="640"></p>
 
-Start a timer while music plays and the second activity buds off into its own bubble, then melts
-back in when it's done. A download or a second player does the same.
+Download something, record the screen or start a timer while music plays, and the second activity
+buds off into its own bubble, then melts back in when it's done. A second player does the same.
 
-<p align="center"><img src="docs/media/split.webp" alt="A timer bubble splitting off the music pill and merging back in" width="640"></p>
+<p align="center"><img src="docs/media/split.webp" alt="A download bubble, then a screen-recording bubble, splitting off the music pill and merging back in" width="640"></p>
 
 ## Ask anything
 

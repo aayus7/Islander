@@ -29,7 +29,7 @@ import { AiPanel, AI_BAR_H, type AiView } from "./AiPanel";
 import { AiThinking, THINKING_SIZE } from "./AiThinking";
 import { useAiSession } from "../lib/aiSession";
 import { TabDock, DOCK_GAP, DOCK_H } from "./TabDock";
-import { COMPACT_REC, REC_PANEL, RecCompact, RecPanel } from "./modules/ScreenRec";
+import { COMPACT_REC, REC_PANEL, RecCompact, RecMinimal, RecPanel } from "./modules/ScreenRec";
 import { recActive, useScreenRec } from "../lib/screenrec";
 import { SIDE, MediaCompactV, ClockCompactV, DownloadCompactV, HudV, RecCompactV } from "./SidePill";
 import type { Dock, DockAlong } from "../settings-types";
@@ -525,7 +525,15 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   useEffect(() => {
     if (!expanded) setRecBrowse(false);
   }, [expanded]);
-  const primary: "rec" | "media" | "clock" | "download" | null = recOn ? "rec" : session?.playing ? "media" : timerLive ? "clock" : downloading ? "download" : null;
+  // Recording while music plays: the music keeps the island and the recording buds off into
+  // the bubble (a breathing red dot). The countdown still takes the whole island.
+  const recBubble = recOn && !!session?.playing && rec.phase !== "countdown" && rec.phase !== "starting";
+  // Clicking that bubble opens the recording's Pause / Stop card.
+  const [recCard, setRecCard] = useState(false);
+  useEffect(() => {
+    if (!expanded) setRecCard(false);
+  }, [expanded]);
+  const primary: "rec" | "media" | "clock" | "download" | null = recOn && !recBubble ? "rec" : session?.playing ? "media" : timerLive ? "clock" : downloading ? "download" : null;
   const mode: Mode =
     banner?.id === "island-hidden"
       ? "banner"
@@ -537,7 +545,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
       ? "ai"
       : incomingReq && !dragging
         ? "incoming"
-      : recOn && expanded && !dragging && !recBrowse
+      : recOn && expanded && !dragging && !recBrowse && (!recBubble || recCard)
         ? "rec"
       : expanded && tab === "ai"
         ? "ai"
@@ -610,8 +618,10 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   /* ---- second activity → split bubble ---- */
   const otherMedia = sessions.find((s) => s.playing && s.id !== session?.id) ?? null;
   // Second live activity → the split bubble: a timer next to music, or a second player.
-  const bubbleKind: "media" | "clock" | "download" | null =
-    primary === "media" && timerLive
+  const bubbleKind: "media" | "clock" | "download" | "rec" | null =
+    primary === "media" && recBubble
+      ? "rec"
+      : primary === "media" && timerLive
       ? "clock"
       : primary !== "download" && downloading
         ? "download"
@@ -1301,7 +1311,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         )}
       </AnimatePresence>
 
-      {bubbleVisible && (bubbleSession || shownKind === "clock" || shownKind === "download") && (
+      {bubbleVisible && (bubbleSession || shownKind === "clock" || shownKind === "download" || shownKind === "rec") && (
         <motion.div
           className="bubble"
           style={{ x: bubbleX, y: bubbleY, scale: bubbleScale, top: 0, width: BUBBLE, height: BUBBLE, background: fill }}
@@ -1310,6 +1320,11 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
             if (other) onSelect(other.id);
             else if (bubbleKind === "clock") window.dispatchEvent(new CustomEvent("island:goto", { detail: "clock" }));
             else if (bubbleKind === "download") window.dispatchEvent(new CustomEvent("island:goto", { detail: "downloads" }));
+            else if (bubbleKind === "rec") {
+              setRecCard(true);
+              setClickOpen(true);
+              setHover(true);
+            }
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -1328,6 +1343,8 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                     : "rgba(255, 159, 10, 0.55)"
                   : shownKind === "download"
                     ? "rgba(48, 209, 88, 0.55)"
+                    : shownKind === "rec"
+                    ? "rgba(255, 59, 48, 0.6)"
                     : "rgba(255, 255, 255, 0.17)"
               }`,
             }}
@@ -1336,6 +1353,8 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
           <motion.div style={{ opacity: bubbleContentOpacity, scale: bubbleContentScale, filter: bubbleContentFilter }}>
             {shownKind === "clock" ? (
               <ClockMinimal />
+            ) : shownKind === "rec" ? (
+              <RecMinimal />
             ) : shownKind === "download" ? (
               <DownloadMinimal active={downloads} />
             ) : (

@@ -1097,6 +1097,9 @@ button { font: inherit; color: inherit; }
   animation: edge-fade linear both;
   animation-timeline: scroll(self inline);
 }
+/* Hide every swipe row's scrollbar with the standard property too. Newer Chrome on Windows
+   can draw a classic scrollbar with arrows here otherwise (seen on the website's timer chips). */
+.nb-list, .chips, .shelf-strip, .launcher-row, .wxp-hours, .send-strip, .sheet-send, .cc-list { scrollbar-width: none; }
 
 /* Compact Now Playing: glow behind the album art. */
 .cmp-glow-wrap { position: relative; display: inline-flex; flex-shrink: 0; }

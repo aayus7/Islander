@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3a3e"/><stop offset="1" stop-color="#1b1b1d"/></linearGradient>
+    <clipPath id="clip"><rect x="100.0" y="100.0" width="824.0" height="824.0" rx="206.0"/></clipPath>
+    <filter id="glow" x="-2" y="-2" width="5" height="5"><feGaussianBlur stdDeviation="43.4"/></filter>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect x="100.0" y="100.0" width="824.0" height="824.0" fill="#ffffff" fill-opacity=".25"/>
+    <rect x="100.0" y="106.0" width="824.0" height="824.0" rx="206.0" fill="url(#tile)"/>
+  </g>
+  <rect x="235.5" y="398.2" width="552.9" height="227.7" rx="113.8" fill="#ffffff" fill-opacity=".12"/>
+  <rect x="240.9" y="403.6" width="542.1" height="216.8" rx="108.4" fill="#000"/>
+  <circle cx="674.6" cy="512" r="54.2" fill="#ff9f0a" filter="url(#glow)"/>
+  <circle cx="674.6" cy="512" r="54.2" fill="#ff9f0a"/>
+</svg>

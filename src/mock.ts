@@ -27,6 +27,8 @@ interface Src {
   playing: boolean;
   position: number;
   sampledAt: number;
+  /** Site/app icon (data: or image URL), as the browser extension sends it. */
+  icon?: string;
 }
 
 const sources: Src[] = [
@@ -47,7 +49,7 @@ function snapshot(): MediaState {
       return {
         id: s.id, app: s.app, title: t.title, artist: t.artist, album: t.album, artwork: t.artwork,
         playing: s.playing, position: s.position, duration: t.duration, sampledAt: s.sampledAt,
-        canNext: true, canPrev: true, canSeek: true, audible: s.playing, rate: 1, source: "windows",
+        canNext: true, canPrev: true, canSeek: true, audible: s.playing, rate: 1, source: s.icon ? "extension" : "windows", icon: s.icon ?? null,
       };
     }),
   };
@@ -162,8 +164,8 @@ export const mock = {
     emit();
   },
   /** Showcase recorder: replace every source (tracks, artwork, who is playing). */
-  stage(list: { id: string; app: string; tracks: typeof TRACKS; index?: number; playing?: boolean; position?: number }[], current?: string | null) {
-    sources.splice(0, sources.length, ...list.map((l) => ({ id: l.id, app: l.app, list: l.tracks, index: l.index ?? 0, playing: l.playing ?? true, position: l.position ?? 0, sampledAt: Date.now() })));
+  stage(list: { id: string; app: string; tracks: typeof TRACKS; index?: number; playing?: boolean; position?: number; icon?: string }[], current?: string | null) {
+    sources.splice(0, sources.length, ...list.map((l) => ({ id: l.id, app: l.app, list: l.tracks, index: l.index ?? 0, playing: l.playing ?? true, position: l.position ?? 0, sampledAt: Date.now(), icon: l.icon })));
     currentId = current === undefined ? (list[0]?.id ?? null) : current;
     emit();
   },

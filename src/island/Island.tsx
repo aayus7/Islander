@@ -1127,7 +1127,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                   <motion.div
                     key="media-vol"
                     className="media-vol"
-                    style={{ top: SIZES.media.h + mediaExtra - 4, width: SIZES.media.w }}
+                    style={{ top: SIZES.media.h + mediaExtra + 2, width: SIZES.media.w }}
                     initial={{ opacity: 0, y: -8, filter: "blur(4px)" }}
                     animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                     exit={{ opacity: 0, y: -6, filter: "blur(3px)", transition: { duration: 0.16 } }}
@@ -1321,7 +1321,7 @@ function Waterdrop({ att, fill }: { att: MotionValue<number>; fill: string }) {
 }
 
 /** Height the media page grows by while the volume row shows. */
-const MEDIA_VOL_H = 34;
+const MEDIA_VOL_H = 40; // 16 above the row (like the gaps above), 22 row, room to match the top padding below
 
 function MediaVolume({ muted, value }: { muted: boolean; value: number }) {
   const level = muted ? 0 : value;

@@ -778,10 +778,13 @@ button { font: inherit; color: inherit; }
 .hud-bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(118, 118, 128, 0.4); overflow: hidden; }
 .hud-fill { height: 100%; border-radius: 3px; background: #fff; }
 /* Volume row under the open media page (volume keys while it's showing). */
-.media-vol { position: absolute; left: 50%; margin-left: 0; translate: -50% 0; box-sizing: border-box; padding: 0 26px; height: 30px; display: flex; align-items: center; }
-.media-vol-row { flex: 1; display: flex; align-items: center; gap: 12px; }
-.media-vol-ico { display: flex; color: #fff; flex-shrink: 0; }
-.media-vol-num { min-width: 42px; text-align: right; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: rgba(235, 235, 245, 0.6); }
+/* Lined up with the player above: icon under the elapsed time, bar exactly under the
+   seek bar, number under the remaining time. */
+.media-vol { position: absolute; left: 50%; translate: -50% 0; box-sizing: border-box; padding: 0 22px; height: 22px; display: flex; align-items: center; }
+.media-vol-row { flex: 1; display: grid; grid-template-columns: 40px 1fr 40px; column-gap: 10px; align-items: center; }
+.media-vol-ico { display: flex; color: rgba(255, 255, 255, 0.9); }
+.media-vol-row .hud-bar { height: 6px; background: rgba(255, 255, 255, 0.2); }
+.media-vol-num { text-align: right; font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--label2); }
 .hud-text { flex: 1; display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
 .hud-state { font-weight: 600; }
 

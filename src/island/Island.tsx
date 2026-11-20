@@ -593,6 +593,10 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
           ? "media"
           : null;
   const other = bubbleKind === "media" ? otherMedia : null;
+  // While the bubble melts back in, keep showing what it showed (fading), not nothing.
+  const lastBubbleKind = useRef(bubbleKind);
+  if (bubbleKind) lastBubbleKind.current = bubbleKind;
+  const shownKind = bubbleKind ?? lastBubbleKind.current;
   // On a side edge the bubble sits under the slim pill instead of beside it.
   const split = mode === "compact" && !!bubbleKind && !lifted;
   const dockOn = (expanded || aiSticky) && TABS.length > 1;
@@ -798,7 +802,17 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const bubbleX = useTransform(bubbleCx, (cx) => cx - BUBBLE / 2);
   const bubbleY = useTransform(bubbleCy, (cy) => cy - BUBBLE / 2);
   const bubbleScale = useTransform(bp, [0, 0.6, 1], [0.55, 0.92, 1]);
-  const bubbleContentOpacity = useTransform(bp, [0.45, 0.9], [0, 1]);
+  // What's inside arrives only once it has pulled free (and leaves first when it melts back):
+  // a fade with a little scale and blur, so it resolves instead of popping. The coloured
+  // ring likewise appears only once it's its own shape, never as a circle over the island.
+  const bubbleContentOpacity = useTransform(bp, [0.55, 0.95], [0, 1]);
+  const bubbleContentScale = useTransform(bp, [0.5, 1], [0.6, 1]);
+  const bubbleContentBlur = useTransform(bp, [0.5, 0.95], [6, 0], { clamp: true });
+  const bubbleContentFilter = useTransform(bubbleContentBlur, (b) => (b > 0.05 ? `blur(${b.toFixed(2)}px)` : "none"));
+  const bubbleRimOpacity = useTransform(bp, [0.72, 1], [0, 1]);
+  // While island and bubble are one joined shape, the island's hairline would draw a seam
+  // across the join: it steps aside for that moment and comes back once they're apart.
+  const rimJoinFade = useTransform(bp, [0, 0.06, 0.82, 1], [1, 0, 0, 1]);
 
   /* ---- tell the backend where we are (for click-through + hover) ---- */
   useEffect(() => {
@@ -1093,7 +1107,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         </AnimatePresence>
 
         {/* Rim: a stroke along the same outline as the clip (only its inner half shows). */}
-        <svg className="island-rim" width={FRAME_W} height={FRAME_H}>
+        <motion.svg className="island-rim" width={FRAME_W} height={FRAME_H} style={{ opacity: rimJoinFade }}>
           <motion.path
             d={rimPath}
             fill="none"
@@ -1102,7 +1116,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
             animate={{ stroke: rimColor, opacity: rimHidden ? 0 : 1 }}
             transition={{ stroke: { duration: 0.45, ease: [0.4, 0, 0.2, 1] }, opacity: { duration: 0.25 } }}
           />
-        </svg>
+        </motion.svg>
 
         <AnimatePresence initial={false} custom={dir}>
           <motion.div
@@ -1230,23 +1244,10 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         )}
       </AnimatePresence>
 
-      {bubbleVisible && (bubbleSession || bubbleKind === "clock" || bubbleKind === "download") && (
+      {bubbleVisible && (bubbleSession || shownKind === "clock" || shownKind === "download") && (
         <motion.div
           className="bubble"
           style={{ x: bubbleX, y: bubbleY, scale: bubbleScale, top: 0, width: BUBBLE, height: BUBBLE, background: fill }}
-          initial={false}
-          animate={{
-            boxShadow: `inset 0 0 0 1.4px ${
-              bubbleKind === "clock"
-                ? clockState.kind === "stopwatch"
-                  ? "rgba(255, 214, 10, 0.55)"
-                  : "rgba(255, 159, 10, 0.55)"
-                : bubbleKind === "download"
-                  ? "rgba(48, 209, 88, 0.55)"
-                  : "rgba(255, 255, 255, 0.17)"
-            }`,
-          }}
-          transition={{ duration: 0.45 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => {
             if (other) onSelect(other.id);
@@ -1257,10 +1258,27 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
             bridge.showContextMenu();
           }}
         >
-          <motion.div style={{ opacity: bubbleContentOpacity }}>
-            {bubbleKind === "clock" ? (
+          <motion.span
+            className="bubble-rim"
+            style={{ opacity: bubbleRimOpacity }}
+            initial={false}
+            animate={{
+              boxShadow: `inset 0 0 0 1.4px ${
+                shownKind === "clock"
+                  ? clockState.kind === "stopwatch"
+                    ? "rgba(255, 214, 10, 0.55)"
+                    : "rgba(255, 159, 10, 0.55)"
+                  : shownKind === "download"
+                    ? "rgba(48, 209, 88, 0.55)"
+                    : "rgba(255, 255, 255, 0.17)"
+              }`,
+            }}
+            transition={{ duration: 0.45 }}
+          />
+          <motion.div style={{ opacity: bubbleContentOpacity, scale: bubbleContentScale, filter: bubbleContentFilter }}>
+            {shownKind === "clock" ? (
               <ClockMinimal />
-            ) : bubbleKind === "download" ? (
+            ) : shownKind === "download" ? (
               <DownloadMinimal active={downloads} />
             ) : (
               bubbleSession && <MediaMinimal session={bubbleSession} />

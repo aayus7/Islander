@@ -50,7 +50,12 @@ button { font: inherit; color: inherit; }
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   pointer-events: auto;
+  /* Under the island: the bubble grows out from behind it (and sinks back in) instead of
+     being drawn over the island's own artwork and waveform. */
+  z-index: 0;
 }
+.island { z-index: 1; }
+.bubble-rim { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; }
 
 .goo { position: absolute; top: 0; left: 50%; pointer-events: none; overflow: visible; }
 .notch { position: absolute; top: 0; left: 50%; pointer-events: none; overflow: visible; }

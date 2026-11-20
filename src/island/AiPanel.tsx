@@ -56,11 +56,19 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
   // this panel, so only an open mic is stopped here.)
   useEffect(() => () => aiSession.dropMic(), []);
 
-  // In the answer view, typing any character starts a follow-up.
+  // In the answer view, typing any character starts a follow-up, and Backspace clears the
+  // answer for a fresh question. The panel keeps keyboard focus so this works straight away.
   useEffect(() => {
     if (view !== "answer" || !active) return;
+    box.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") return onClose();
+      if ((e.key === "Backspace" || e.key === "Delete") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (status === "thinking" || status === "streaming") aiSession.cancel();
+        aiSession.askAgain("");
+        return;
+      }
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         aiSession.askAgain(e.key);
@@ -68,7 +76,7 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [view, active, onClose]);
+  }, [view, active, onClose, status]);
 
   // Report our natural size so the island can spring to it.
   useLayoutEffect(() => {
@@ -84,7 +92,7 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
   // Glowing caret follows the text.
   useLayoutEffect(() => {
     setCaretX(measure.current?.getBoundingClientRect().width ?? 0);
-  }, [q]);
+  }, [q, view]); // the field is rebuilt when coming back from an answer
 
   useEffect(() => {
     const s = scroller.current;
@@ -111,7 +119,7 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
   };
 
   return (
-    <div ref={box} className={`ai ai-view-${view}`} style={{ width }}>
+    <div ref={box} className={`ai ai-view-${view}`} style={{ width }} tabIndex={-1}>
       <AnimatePresence>
         {busy && (
           <motion.div
@@ -234,7 +242,27 @@ export function AiPanel({ width, active, onActivate, onShape, onClose }: Props) 
                     </span>
                   ))}
                 </p>
-                {status === "idle" && meta && <SourceLine meta={meta} />}
+                {status === "idle" && (
+                  <div className="ai-foot">
+                    {meta ? <SourceLine meta={meta} /> : <span />}
+                    <motion.button
+                      className="ai-new"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, delay: 0.15 }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!active) onActivate();
+                        aiSession.askAgain("");
+                      }}
+                      title="Or just start typing"
+                    >
+                      <kbd>⌫</kbd>
+                      New question
+                    </motion.button>
+                  </div>
+                )}
               </>
             )}
           </motion.div>

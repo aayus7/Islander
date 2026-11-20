@@ -780,7 +780,7 @@ button { font: inherit; color: inherit; }
 /* Volume row under the open media page (volume keys while it's showing). */
 /* A centred group: speaker · bar · number, with the same gap on both sides of the bar. */
 .media-vol { position: absolute; left: 50%; translate: -50% 0; height: 22px; display: flex; align-items: center; justify-content: center; }
-.media-vol-row { display: flex; align-items: center; gap: 12px; }
+.media-vol-row { display: flex; align-items: center; gap: 7px; }
 .media-vol-ico { display: flex; width: 18px; justify-content: center; color: rgba(255, 255, 255, 0.9); }
 .media-vol-row .hud-bar { flex: none; width: 220px; height: 6px; background: rgba(255, 255, 255, 0.2); }
 /* Fixed width (fits "100") so the group doesn't shift as the number changes. */

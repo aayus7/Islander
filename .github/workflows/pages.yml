@@ -1,4 +1,4 @@
-# Publishes the website (site/) to GitHub Pages: https://aayus7.github.io/islander/
+# Publishes the website (site/) to GitHub Pages: https://aayus7.github.io/Islander/
 name: Website
 on:
   push:

@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/aayus7/Islander/releases/latest"><img src="https://img.shields.io/github/v/release/aayus7/Islander?label=Download&style=for-the-badge&color=0a84ff" alt="Download"></a>
-  <a href="https://aayus7.github.io/islander/"><img src="https://img.shields.io/badge/Website-Try%20it%20live-f2f2f7?style=for-the-badge" alt="Website: try the island live"></a>
+  <a href="https://aayus7.github.io/Islander/"><img src="https://img.shields.io/badge/Website-Try%20it%20live-f2f2f7?style=for-the-badge" alt="Website: try the island live"></a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-1c1c1e?style=for-the-badge" alt="Windows 10 and 11">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-1c1c1e?style=for-the-badge" alt="GPL-3.0"></a>
   <a href="https://ko-fi.com/aayus7"><img src="https://img.shields.io/badge/Ko--fi-Support%20Islander-ff5e5b?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support Islander on Ko-fi"></a>

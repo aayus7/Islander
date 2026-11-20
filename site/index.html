@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="booting">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,13 +11,17 @@
 <meta property="og:title" content="Islander · The Dynamic Island, now on Windows">
 <meta property="og:description" content="The most faithful 1:1 Dynamic Island for Windows 10 and 11. Free and open source.">
 <meta property="og:url" content="https://aayus7.github.io/Islander/">
-<meta property="og:image" content="https://aayus7.github.io/Islander/media/og.png">
+<meta property="og:image" content="https://aayus7.github.io/Islander/media/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://aayus7.github.io/Islander/media/og.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<meta name="twitter:image" content="https://aayus7.github.io/Islander/media/og.jpg">
+<link rel="preload" href="fonts/Geist-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Geist-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/instrument-serif-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="island.html" as="document">
 <style>
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/Geist-Regular.woff2) format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 500 700; font-display: swap; src: url(fonts/Geist-SemiBold.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Serif"; font-style: italic; font-weight: 400; font-display: swap; src: url(fonts/instrument-serif-latin-400-italic.woff2) format("woff2"); }
 /* Islander: liquid chrome. One visual world (dark): black ground, white type, a chrome italic serif
    for the single word that matters, and live liquid metal where the page needs a moment.
    Layout: hero demo → film → feature rows (copy | real clip) → bento → the 1:1 claim → download. */
@@ -144,6 +148,12 @@ section { position: relative; }
 .play { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(60% 60% at 50% 50%, rgba(0,0,0,0.05), rgba(0,0,0,0.45)); border: 0; cursor: pointer; color: #fff; font-family: inherit; }
 .play-in { display: flex; align-items: center; gap: 14px; padding: 14px 26px 14px 16px; border-radius: 99px; background: rgba(20, 20, 24, 0.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; font-size: 17px; transition: transform 0.3s cubic-bezier(.2,.8,.2,1); }
 .play:hover .play-in { transform: scale(1.04); }
+.sound { position: absolute; top: 18px; right: 18px; z-index: 3; display: inline-flex; align-items: center; gap: 9px; padding: 10px 16px 10px 13px; border-radius: 99px; border: 0; cursor: pointer; font: 600 15px/1 var(--display); color: #fff;
+  background: rgba(20, 20, 24, 0.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 0 0 1px var(--line-2);
+  animation: sound-in 0.5s cubic-bezier(.3, 1.4, .5, 1) both; transition: transform 0.3s cubic-bezier(.3, 1.6, .5, 1), background 0.25s; }
+.sound:hover { transform: scale(1.05); background: rgba(30, 30, 36, 0.7); }
+.sound:active { transform: scale(0.95); }
+@keyframes sound-in { from { opacity: 0; transform: translateY(-6px) scale(0.92); } }
 .play-dot { width: 46px; height: 46px; border-radius: 50%; background: #fff; display: grid; place-items: center; }
 
 /* feature rows */
@@ -161,7 +171,7 @@ kbd { font-family: var(--display); font-size: 13.5px; padding: 4px 9px; border-r
 .screen { position: relative; border-radius: 26px; overflow: hidden; background: #0b0d18; box-shadow: 0 0 0 1px var(--line-2), 0 50px 100px -40px rgba(0, 0, 0, 0.95), 0 20px 40px -20px rgba(0, 0, 0, 0.6); }
 .screen::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 28%); }
 .screen { max-width: 680px; justify-self: center; width: 100%; }
-.screen img { width: 100%; height: auto; }
+.screen img, .screen video { width: 100%; height: auto; }
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
     .rise { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% cover 32%; }
@@ -177,7 +187,7 @@ kbd { font-family: var(--display); font-size: 13.5px; padding: 4px 9px; border-r
 .tile h4 { margin: 0; font-size: 24px; letter-spacing: -0.035em; font-weight: 600; line-height: 1.1; }
 .tile p { color: var(--mute); font-size: 15.5px; }
 .tile .shot { margin-top: auto; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); background: #0b0d18; }
-.tile .shot img { width: 100%; height: auto; }
+.tile .shot img, .tile .shot video { width: 100%; height: auto; }
 
 /* claim */
 .claim { padding: 40px 0 150px; }
@@ -222,9 +232,28 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
   html { scroll-behavior: auto; }
   * { transition-duration: 0.01ms !important; }
 }
+/* ---------- loading: nothing shows until the page can look the way it should ---------- */
+html.booting body { overflow: hidden; }
+#boot { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--ground); transition: opacity 0.7s cubic-bezier(.4, 0, .2, 1), visibility 0s linear 0.7s, filter 0.7s; }
+html:not(.booting) #boot { opacity: 0; visibility: hidden; filter: blur(6px); pointer-events: none; }
+.boot-pill { width: 72px; height: 34px; border-radius: 99px; background: #000; box-shadow: inset 0 0 0 1px var(--line-2), 0 20px 50px -18px rgba(255, 159, 10, 0.25); position: relative; transition: transform 0.7s cubic-bezier(.4, 0, .2, 1); }
+.boot-pill::after { content: ""; position: absolute; top: 8px; left: 8px; width: 18px; height: 18px; border-radius: 50%; background: #ff9f0a; box-shadow: 0 0 14px rgba(255, 159, 10, 0.75);
+  animation: boot-dot 1.6s cubic-bezier(.65, 0, .35, 1) infinite alternate; }
+@keyframes boot-dot { from { transform: translateX(0); opacity: 0.55; } to { transform: translateX(38px); opacity: 1; } }
+html:not(.booting) .boot-pill { transform: scale(0.85); }
+/* the hero arrives once the curtain lifts */
+html.revealed .hero-in > * { animation: hero-in 0.9s cubic-bezier(.2, .8, .2, 1) backwards; }
+html.revealed .hero-in > :nth-child(2) { animation-delay: 0.06s; }
+html.revealed .hero-in > :nth-child(3) { animation-delay: 0.12s; }
+html.revealed .hero-in > :nth-child(4) { animation-delay: 0.18s; }
+html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
+@keyframes hero-in { from { opacity: 0; transform: translateY(26px); filter: blur(8px); } }
+@media (prefers-reduced-motion: reduce) { .boot-pill::after { animation-duration: 3s; } html.revealed .hero-in > * { animation: none; } }
 </style>
+<noscript><style>#boot { display: none; } html.booting body { overflow: auto; }</style></noscript>
 </head>
 <body>
+<div id="boot" aria-hidden="true"><div class="boot-pill"></div></div>
 
 <header class="nav" id="nav">
   <div class="nav-in">
@@ -252,7 +281,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
         <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/latest"><svg class="win" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M0 2.3 6.5 1.4v6.2H0zm7.3-1L16 0v7.6H7.3zM0 8.4h6.5v6.2L0 13.7zm7.3 0H16V16l-8.7-1.2z"/></svg>Download for Windows</a>
         <a class="btn btn-ghost" href="#film">Watch the film</a>
       </div>
-      <div class="meta"><span>Free</span><span>Open source</span><span>Version 0.9.1</span><span>Windows 10 &amp; 11</span></div>
+      <div class="meta"><span>Free</span><span>Open source</span><span>Version 0.9.2</span><span>Windows 10 &amp; 11</span></div>
     </div>
   </section>
 
@@ -260,6 +289,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
     <div class="wrap">
       <div class="film-card rise">
         <video id="film-video" preload="none" poster="media/trailer-poster.jpg" playsinline controls hidden><source src="media/trailer.mp4" type="video/mp4"></video>
+        <button class="sound" id="film-sound" type="button" hidden aria-label="Turn on sound and play the trailer from the start"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path d="m22 9-6 6M16 9l6 6"/></svg>Tap for sound</button>
         <img id="film-poster" src="media/trailer-poster.jpg" alt="A frame from the Islander trailer: the music island floating over liquid metal">
         <button class="play" id="film-play" type="button" aria-label="Play the Islander trailer, 72 seconds">
           <span class="play-in"><span class="play-dot"><svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><path d="M2 1.5v15L15 9z" fill="#000"/></svg></span>Watch the film · 1:12</span>
@@ -283,7 +313,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
           <p>Real album art, a waveform that follows the actual audio, a scrubber you can drag and one tap to switch between apps that are playing.</p>
           <div class="chips"><span class="chip">Spotify</span><span class="chip">YouTube</span><span class="chip">mpv</span><span class="chip">Stremio</span><span class="chip">Any media app</span></div>
         </div>
-        <div class="screen rise"><img src="media/music.webp" width="640" height="280" alt="Hovering the island while Spotify plays: it opens to a player, scrubs, and switches to YouTube" loading="lazy"></div>
+        <div class="screen rise"><video class="clip" src="media/clips/music.mp4" poster="media/clips/music.jpg" width="640" height="280" muted loop playsinline preload="none" aria-label="Hovering the island while Spotify plays: it opens to a player, scrubs, and switches to YouTube"></video></div>
       </article>
 
       <article class="feat flip">
@@ -292,7 +322,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
           <h3>Skip, and watch it <span class="chrome">turn.</span></h3>
           <p>The cover turns on its axis, blurs and lands sharp, exactly like iOS. Tucked away as a pill it turns too, glowing in the colour of each album.</p>
         </div>
-        <div class="screen rise"><img src="media/music-skip.webp" width="640" height="280" alt="Skipping tracks: each new cover turns into place" loading="lazy"></div>
+        <div class="screen rise"><video class="clip" src="media/clips/music-skip.mp4" poster="media/clips/music-skip.jpg" width="640" height="280" muted loop playsinline preload="none" aria-label="Skipping tracks: each new cover turns into place"></video></div>
       </article>
 
       <article class="feat">
@@ -302,7 +332,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
           <p>Press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Space</kbd> and the island becomes a search bar. Type or speak, and get a short answer with its sources from live web, news and sports results.</p>
           <div class="chips"><span class="chip">No account</span><span class="chip">No API key</span><span class="chip">Voice</span><span class="chip">Follow-ups</span></div>
         </div>
-        <div class="screen rise"><img src="media/ai.webp" width="640" height="250" alt="Typing a question into the island and getting an answer with sources" loading="lazy"></div>
+        <div class="screen rise"><video class="clip" src="media/clips/ai.mp4" poster="media/clips/ai.jpg" width="640" height="250" muted loop playsinline preload="none" aria-label="Typing a question into the island and getting an answer with sources"></video></div>
       </article>
 
       <article class="feat flip">
@@ -312,7 +342,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
           <p>iPhone and Android phones running LocalSend show up right in the island. Accept photos with one click, watch them arrive, and send files back from the Shelf. Nothing leaves your Wi‑Fi.</p>
           <div class="chips"><span class="chip">iPhone</span><span class="chip">Android</span><span class="chip">Other PCs</span></div>
         </div>
-        <div class="screen rise"><img src="media/airdrop.webp" width="640" height="360" alt="A phone offers three photos, they are accepted, arrive, and are sent on to another phone from the Shelf" loading="lazy"></div>
+        <div class="screen rise"><video class="clip" src="media/clips/airdrop.mp4" poster="media/clips/airdrop.jpg" width="640" height="360" muted loop playsinline preload="none" aria-label="A phone offers three photos, they are accepted, arrive, and are sent on to another phone from the Shelf"></video></div>
       </article>
 
       <article class="feat">
@@ -322,7 +352,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
           <p>Windows notifications arrive as island banners, with the sender’s profile picture and any image they sent. Swipe one away, or click it to open the app.</p>
           <div class="chips"><span class="chip">Discord</span><span class="chip">WhatsApp</span><span class="chip">Every app</span></div>
         </div>
-        <div class="screen rise"><img src="media/discord.webp" width="640" height="110" alt="Discord messages dropping out of the island with profile pictures" loading="lazy"></div>
+        <div class="screen rise"><video class="clip" src="media/clips/discord.mp4" poster="media/clips/discord.jpg" width="640" height="110" muted loop playsinline preload="none" aria-label="Discord messages dropping out of the island with profile pictures"></video></div>
       </article>
 
       <article class="feat flip">
@@ -332,7 +362,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
           <p>Progress, speed and time left for your browser, Internet Download Manager and Mister Download Manager. Hover for the full list, or click a finished file to open its folder.</p>
           <div class="chips"><span class="chip">Browsers</span><span class="chip">IDM</span><span class="chip">MDM</span></div>
         </div>
-        <div class="screen rise"><img src="media/downloads.webp" width="640" height="260" alt="Two downloads with live progress and speed, then a completion banner" loading="lazy"></div>
+        <div class="screen rise"><video class="clip" src="media/clips/downloads.mp4" poster="media/clips/downloads.jpg" width="640" height="260" muted loop playsinline preload="none" aria-label="Two downloads with live progress and speed, then a completion banner"></video></div>
       </article>
 
       <article class="feat">
@@ -341,7 +371,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
           <h3>Weather that <span class="chrome">moves.</span></h3>
           <p>Falling snow, drifting clouds and rain behind the temperature, an hourly strip and a 7-day forecast, styled after iOS Weather.</p>
         </div>
-        <div class="screen rise"><img src="media/weather.webp" width="640" height="390" alt="The weather tab with falling snow, scrolled to the 7-day forecast" loading="lazy"></div>
+        <div class="screen rise"><video class="clip" src="media/clips/weather.mp4" poster="media/clips/weather.jpg" width="640" height="390" muted loop playsinline preload="none" aria-label="The weather tab with falling snow, scrolled to the 7-day forecast"></video></div>
       </article>
     </div>
   </section>
@@ -352,12 +382,12 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
         <h2 id="more-title">And so much <span class="chrome">more.</span></h2>
       </div>
       <div class="grid">
-        <div class="tile wide rise"><h4>Even when it’s tucked away</h4><p>A small pill with the cover, a glow in its colour and a live waveform.</p><div class="shot"><img src="media/music-compact.webp" width="520" height="64" alt="The collapsed music pill turning its cover on a skip" loading="lazy"></div></div>
-        <div class="tile wide rise"><h4>Connected, in 3D</h4><p>AirPods and Beats spin into view with their battery.</p><div class="shot"><img src="media/airpods.webp" width="520" height="104" alt="AirPods Pro connecting with a 3D animation" loading="lazy"></div></div>
-        <div class="tile rise"><h4>Live Activities</h4><p>Timers, stopwatches and focus sessions stay with you.</p><div class="shot"><img src="media/timer.webp" width="640" height="240" alt="A timer starting and turning into a live pill" loading="lazy"></div></div>
-        <div class="tile rise"><h4>Volume and brightness</h4><p>The Windows pop-ups, replaced. Plus Silent and Caps Lock.</p><div class="shot"><img src="media/hud.webp" width="520" height="64" alt="Volume, Silent, brightness and Caps Lock pills" loading="lazy"></div></div>
-        <div class="tile rise"><h4>Know when you’re on</h4><p>Camera and microphone dots, right where iPhone puts them.</p><div class="shot"><img src="media/privacy.webp" width="520" height="70" alt="Microphone and camera dots beside the island" loading="lazy"></div></div>
-        <div class="tile wide rise" style="grid-column: span 6"><h4>Everything, one hover away</h4><p>Control Center, calendar, notes and to-dos, a file shelf, clipboard history and system stats. Scroll to move between them, and turn off or reorder any.</p><div class="shot"><img src="media/tour.webp" width="640" height="380" alt="Scrolling through every tab of the island" loading="lazy"></div></div>
+        <div class="tile wide rise"><h4>Even when it’s tucked away</h4><p>A small pill with the cover, a glow in its colour and a live waveform.</p><div class="shot"><video class="clip" src="media/clips/music-compact.mp4" poster="media/clips/music-compact.jpg" width="520" height="64" muted loop playsinline preload="none" aria-label="The collapsed music pill turning its cover on a skip"></video></div></div>
+        <div class="tile wide rise"><h4>Connected, in 3D</h4><p>AirPods and Beats spin into view with their battery.</p><div class="shot"><video class="clip" src="media/clips/airpods.mp4" poster="media/clips/airpods.jpg" width="520" height="104" muted loop playsinline preload="none" aria-label="AirPods Pro connecting with a 3D animation"></video></div></div>
+        <div class="tile rise"><h4>Live Activities</h4><p>Timers, stopwatches and focus sessions stay with you.</p><div class="shot"><video class="clip" src="media/clips/timer.mp4" poster="media/clips/timer.jpg" width="640" height="240" muted loop playsinline preload="none" aria-label="A timer starting and turning into a live pill"></video></div></div>
+        <div class="tile rise"><h4>Volume and brightness</h4><p>The Windows pop-ups, replaced. Plus Silent and Caps Lock.</p><div class="shot"><video class="clip" src="media/clips/hud.mp4" poster="media/clips/hud.jpg" width="520" height="64" muted loop playsinline preload="none" aria-label="Volume, Silent, brightness and Caps Lock pills"></video></div></div>
+        <div class="tile rise"><h4>Know when you’re on</h4><p>Camera and microphone dots, right where iPhone puts them.</p><div class="shot"><video class="clip" src="media/clips/privacy.mp4" poster="media/clips/privacy.jpg" width="520" height="70" muted loop playsinline preload="none" aria-label="Microphone and camera dots beside the island"></video></div></div>
+        <div class="tile wide rise" style="grid-column: span 6"><h4>Everything, one hover away</h4><p>Control Center, calendar, notes and to-dos, a file shelf, clipboard history and system stats. Scroll to move between them, and turn off or reorder any.</p><div class="shot"><video class="clip" src="media/clips/tour.mp4" poster="media/clips/tour.jpg" width="640" height="380" muted loop playsinline preload="none" aria-label="Scrolling through every tab of the island"></video></div></div>
       </div>
     </div>
   </section>
@@ -405,6 +435,27 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
 </footer>
 
 <script>
+  /* ---------- reveal: wait for the fonts, the live island and the first frame of liquid metal ---------- */
+  const ready = (() => {
+    const wait = {};
+    const make = (k) => new Promise((r) => (wait[k] = r));
+    const all = [make("island"), make("metal"),
+      document.fonts && document.fonts.load ? Promise.all([document.fonts.load('600 1em "Geist"'), document.fonts.load('400 1em "Geist"'), document.fonts.load('italic 400 1em "Instrument Serif"')]).catch(() => {}) : Promise.resolve()];
+    const t0 = performance.now();
+    const reveal = () => {
+      if (!document.documentElement.classList.contains("booting")) return;
+      // keep the loading screen up at least a beat, so it never just flickers
+      const wait = Math.max(0, 450 - (performance.now() - t0));
+      setTimeout(() => {
+        document.documentElement.classList.remove("booting");
+        document.documentElement.classList.add("revealed");
+      }, wait);
+    };
+    Promise.all(all).then(reveal);
+    setTimeout(reveal, 6000); // never hold the page hostage on a slow connection
+    return (k) => wait[k] && wait[k]();
+  })();
+
   /* ---------- the live island: real app UI in a frame; the page stays clickable around it ---------- */
   (() => {
     const fr = document.querySelector('iframe.live'), hero = document.querySelector('.hero');
@@ -425,6 +476,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
     const set = (x) => { target = x; if (!raf) raf = requestAnimationFrame(step); };
     addEventListener('message', (e) => {
       if (e.source !== fr.contentWindow || !e.data || !e.data.island) return;
+      if (e.data.ready) ready("island");
       if (e.data.rect) {
         rect = e.data.rect;
         fr.style.pointerEvents = e.data.hover ? 'auto' : 'none';
@@ -456,6 +508,18 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
   const onScroll = () => nav.classList.toggle("solid", scrollY > 40);
   addEventListener("scroll", onScroll, { passive: true });
   onScroll();
+
+  /* ---------- clips: load when near, play only while on screen ---------- */
+  (() => {
+    const io = new IntersectionObserver((es) => {
+      for (const e of es) {
+        const v = e.target;
+        if (e.isIntersecting) { if (v.preload !== "auto") v.preload = "auto"; const p = v.play(); if (p) p.catch(() => {}); }
+        else if (!v.paused) v.pause();
+      }
+    }, { rootMargin: "120px 0px", threshold: 0.01 });
+    document.querySelectorAll("video.clip").forEach((v) => io.observe(v));
+  })();
 
   /* ---------- buttons: magnetic pull, light that follows the cursor ---------- */
   (() => {
@@ -500,13 +564,45 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
     document.addEventListener("pointerleave", () => { px = py = -1e4; kick(); });
   })();
 
-  /* ---------- the trailer ---------- */
-  const fv = document.getElementById("film-video"), fp = document.getElementById("film-play"), po = document.getElementById("film-poster");
+  /* ---------- the trailer: plays by itself (muted) when it scrolls into view ---------- */
+  const fv = document.getElementById("film-video"), fp = document.getElementById("film-play"), po = document.getElementById("film-poster"), fs = document.getElementById("film-sound");
+  const card = fv.closest(".film-card");
+  let auto = true;      // still allowed to start/pause itself (until the person takes over or it ends)
+  let inView = false;
+  const show = () => { fv.hidden = false; po.hidden = true; fp.hidden = true; };
+  const soundBtn = (on) => { fs.hidden = !on; };
+  function autoPlay() {
+    if (!auto) return;
+    show();
+    fv.muted = true;
+    const p = fv.play();
+    if (p) p.then(() => soundBtn(fv.muted)).catch(() => { fv.hidden = true; po.hidden = false; fp.hidden = false; });
+  }
+  // start loading a little before it's on screen, play once it's mostly visible, pause when it leaves
+  new IntersectionObserver((es) => { if (es[0].isIntersecting && fv.preload !== "auto") { fv.preload = "auto"; fv.load(); } }, { rootMargin: "600px 0px" }).observe(card);
+  new IntersectionObserver((es) => {
+    inView = es[0].intersectionRatio >= 0.55;
+    if (inView) autoPlay();
+    else if (auto && !fv.paused) { selfPause = true; fv.pause(); }
+  }, { threshold: [0, 0.55] }).observe(card);
+  // the big button: play with sound
   fp.addEventListener("click", () => {
-    fv.hidden = false; po.hidden = true; fp.hidden = true;
+    auto = false; show(); fv.muted = false; soundBtn(false);
     fv.play().catch(() => {});
   });
+  // "Tap for sound": unmute and restart from the top so nothing is missed
+  fs.addEventListener("click", () => {
+    auto = false; fv.muted = false; soundBtn(false);
+    if (fv.currentTime > 4) fv.currentTime = 0;
+    fv.play().catch(() => {});
+  });
+  // using the controls (pause, seek, volume) hands it over to the person
+  fv.addEventListener("volumechange", () => { if (!fv.muted) { auto = false; soundBtn(false); } });
+  // pausing it yourself means "leave it paused": don't restart it on the next scroll past
+  let selfPause = false;
+  fv.addEventListener("pause", () => { if (!selfPause && !fv.ended) auto = false; selfPause = false; });
   fv.addEventListener("ended", () => {
+    auto = false; soundBtn(false);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     fv.hidden = true; po.hidden = false; fp.hidden = false;
     fp.querySelector(".play-in").lastChild.textContent = "Watch again";
@@ -560,19 +656,20 @@ void main(){
   function metal(canvas, opts) {
     let gl;
     try { gl = canvas.getContext("webgl", { antialias: false, alpha: false, powerPreference: "low-power" }); } catch (e) { gl = null; }
-    if (!gl) return; // the CSS image stays as the fallback
+    const done = () => opts.onReady && opts.onReady();
+    if (!gl) return done(); // the CSS image stays as the fallback
     const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
     const vs = sh(gl.VERTEX_SHADER, VERT), fs = sh(gl.FRAGMENT_SHADER, FRAG);
-    if (!vs || !fs) return;
+    if (!vs || !fs) return done();
     const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr);
-    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return;
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return done();
     gl.useProgram(pr);
     const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     const uR = gl.getUniformLocation(pr, "R"), uT = gl.getUniformLocation(pr, "T"), uM = gl.getUniformLocation(pr, "M"), uS = gl.getUniformLocation(pr, "S");
     const scale = Math.min(window.devicePixelRatio || 1, 1.5) * 0.55;
-    let mx = 0.6, my = 0.3, tx = mx, ty = my, visible = true, t0 = performance.now() - (opts.offset || 0);
+    let drawn = false, mx = 0.6, my = 0.3, tx = mx, ty = my, visible = true, t0 = performance.now() - (opts.offset || 0);
     function size() { const w = canvas.clientWidth, h = canvas.clientHeight; canvas.width = Math.max(2, w * scale | 0); canvas.height = Math.max(2, h * scale | 0); gl.viewport(0, 0, canvas.width, canvas.height); }
     size(); addEventListener("resize", size);
     canvas.parentElement.addEventListener("pointermove", (ev) => {
@@ -587,11 +684,12 @@ void main(){
       gl.uniform2f(uM, mx, my);
       gl.uniform1f(uS, opts.slope || 0.55);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (!drawn) { drawn = true; done(); }
       if (visible) requestAnimationFrame(draw);
     }
     requestAnimationFrame(draw);
   }
-  metal(document.getElementById("metal-hero"), { slope: 0.42 });
+  metal(document.getElementById("metal-hero"), { slope: 0.42, onReady: () => ready("metal") });
   metal(document.getElementById("metal-get"), { slope: 0.42, offset: 40000 });
 })();
 </script>

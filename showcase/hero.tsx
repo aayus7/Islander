@@ -182,5 +182,11 @@ function next() {
   setTimeout(go, wait);
 }
 await import("../src/main");
+// Tell the website once the island is really there (drawn, fonts in) so it can reveal the page.
+(async () => {
+  await document.fonts.ready;
+  while (!document.querySelector(".island svg path")) await new Promise((r) => requestAnimationFrame(r));
+  requestAnimationFrame(() => requestAnimationFrame(() => parent.postMessage({ island: true, ready: true }, "*")));
+})();
 // island.html?still: no cycle (for testing)
 if (!location.search.includes("still")) next();

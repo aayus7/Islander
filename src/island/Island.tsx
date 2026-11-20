@@ -1333,7 +1333,7 @@ function MediaVolume({ muted, value }: { muted: boolean; value: number }) {
       <div className="hud-bar">
         <motion.div className="hud-fill" initial={false} animate={{ width: `${Math.round(level * 100)}%` }} transition={{ type: "spring", stiffness: 600, damping: 40 }} />
       </div>
-      <span className="media-vol-num">{muted ? "Muted" : Math.round(level * 100)}</span>
+      <span className="media-vol-num">{Math.round(level * 100)}</span>
     </div>
   );
 }

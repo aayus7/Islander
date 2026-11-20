@@ -778,13 +778,13 @@ button { font: inherit; color: inherit; }
 .hud-bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(118, 118, 128, 0.4); overflow: hidden; }
 .hud-fill { height: 100%; border-radius: 3px; background: #fff; }
 /* Volume row under the open media page (volume keys while it's showing). */
-/* Lined up with the player above: icon under the elapsed time, bar exactly under the
-   seek bar, number under the remaining time. */
-.media-vol { position: absolute; left: 50%; translate: -50% 0; box-sizing: border-box; padding: 0 22px; height: 22px; display: flex; align-items: center; }
-.media-vol-row { flex: 1; display: grid; grid-template-columns: 40px 1fr 40px; column-gap: 10px; align-items: center; }
-.media-vol-ico { display: flex; color: rgba(255, 255, 255, 0.9); }
-.media-vol-row .hud-bar { height: 6px; background: rgba(255, 255, 255, 0.2); }
-.media-vol-num { text-align: right; font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--label2); }
+/* A centred group: speaker · bar · number, with the same gap on both sides of the bar. */
+.media-vol { position: absolute; left: 50%; translate: -50% 0; height: 22px; display: flex; align-items: center; justify-content: center; }
+.media-vol-row { display: flex; align-items: center; gap: 12px; }
+.media-vol-ico { display: flex; width: 18px; justify-content: center; color: rgba(255, 255, 255, 0.9); }
+.media-vol-row .hud-bar { flex: none; width: 220px; height: 6px; background: rgba(255, 255, 255, 0.2); }
+/* Fixed width (fits "100") so the group doesn't shift as the number changes. */
+.media-vol-num { width: 3ch; text-align: left; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--label2); }
 .hud-text { flex: 1; display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
 .hud-state { font-weight: 600; }
 

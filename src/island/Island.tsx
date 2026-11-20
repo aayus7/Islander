@@ -15,7 +15,7 @@ import { ShelfPanel, useShelf, useShelfDrop } from "./modules/Shelf";
 import { ClipboardPanel, useClips } from "./modules/Clipboard";
 import { StatsPanel } from "./modules/Stats";
 import { ControlsPanel } from "./modules/Controls";
-import { Banner, useBanners, BANNER_H, pushBanner, pushBannerNow, dismissBanner } from "./modules/Banners";
+import { Banner, useBanners, BANNER_H, pushBanner, pushBannerNow, dismissBanner, isUrgent, setBannerShowing } from "./modules/Banners";
 import { on, send } from "../lib/native";
 import { Hud, useHud, quietHud, HUD_SIZE, MUTE_SIZE, Speaker } from "./modules/Hud";
 import { DeviceActivity, PowerActivity, useActivity, DEVICE_SIZE, POWER_SIZE } from "./modules/Devices";
@@ -503,6 +503,10 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const mode: Mode =
     banner?.id === "island-hidden"
       ? "banner"
+    : // A timer or focus alarm shows over everything, even Search or Ask while it answers
+      // (the answer keeps coming in underneath and is there again after the alert).
+      isUrgent(banner) && !dragging
+      ? "banner"
     : aiSticky
       ? "ai"
       : incomingReq && !dragging
@@ -526,6 +530,9 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   // Volume keys while the media page is open: the island grows a volume row underneath
   // instead of swapping to the HUD pill (useHud clears it again after a moment).
   const mediaVol = mode === "expanded" && tab === "media" && hud && (hud.kind === "volume" || hud.kind === "mute") ? hud : null;
+
+  // Banners only count down while they're actually on screen.
+  useEffect(() => setBannerShowing(mode === "banner"), [mode]);
 
   // While Gemini thinks, the island shrinks to just the glowing dot spinner, then
   // springs open again when the answer starts arriving.

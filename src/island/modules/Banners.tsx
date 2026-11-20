@@ -38,6 +38,8 @@ export interface BannerData {
   file?: string;
   at: number;
   ttl: number;
+  /** When it was pushed (the head's `at` restarts whenever it comes on screen). */
+  pushed?: number;
 }
 
 /* ---- queue ---- */
@@ -46,12 +48,15 @@ const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 export function pushBanner(b: Omit<BannerData, "at" | "ttl"> & { ttl?: number }) {
   if (queue.some((q) => q.id === b.id)) return;
-  queue = [...queue, { ttl: 5200, ...b, at: Date.now() }].slice(-6);
+  // An alarm goes ahead of ordinary notifications that are waiting.
+  const item = { ttl: 5200, ...b, at: Date.now(), pushed: Date.now() };
+  queue = isUrgent(item) ? [...queue.filter(isUrgent), item, ...queue.filter((q) => !isUrgent(q))] : [...queue, item];
+  queue = queue.slice(0, 6);
   emit();
 }
 /** Show this one right now, ahead of anything waiting. */
 export function pushBannerNow(b: Omit<BannerData, "at" | "ttl"> & { ttl?: number }) {
-  queue = [{ ttl: 5200, ...b, at: Date.now() }, ...queue.filter((q) => q.id !== b.id).map((q) => ({ ...q, at: Date.now() }))].slice(0, 6);
+  queue = [{ ttl: 5200, ...b, at: Date.now(), pushed: Date.now() }, ...queue.filter((q) => q.id !== b.id).map((q) => ({ ...q, at: Date.now() }))].slice(0, 6);
   emit();
 }
 export function dismissBanner(id: string) {
@@ -59,8 +64,27 @@ export function dismissBanner(id: string) {
   emit();
 }
 let paused = false;
+/** Whether the island is showing the banner right now. A banner's time only runs while it's
+ * on screen: one that arrived while the island was busy (an open panel, Search or Ask) used
+ * to time out unseen, so a finished timer could go by without its alert. */
+let showing = false;
+export function setBannerShowing(v: boolean) {
+  if (v === showing) return;
+  showing = v;
+  if (v && queue.length) {
+    // Shown at last: the head gets its full time, and stale ordinary notifications that
+    // piled up meanwhile are dropped (alarms are always kept).
+    const now = Date.now();
+    queue = queue
+      .filter((b, i) => i === 0 || isUrgent(b) || now - (b.pushed ?? now) < 90_000)
+      .map((b, i) => (i === 0 ? { ...b, at: now } : b));
+    emit();
+  }
+}
+/** Alerts that must be seen: they show even over an open panel or Search or Ask. */
+export const isUrgent = (b: BannerData | null | undefined) => !!b && (b.glyph === "timer" || b.glyph === "focus");
 setInterval(() => {
-  if (paused || !queue.length) return;
+  if (paused || !showing || !queue.length) return;
   const head = queue[0];
   if (Date.now() - head.at > head.ttl) {
     queue = queue.slice(1).map((b, i) => (i === 0 ? { ...b, at: Date.now() } : b));

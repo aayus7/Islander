@@ -41,6 +41,11 @@ as a pill, it keeps the art in view with a soft glow in the album's own colour, 
 
 <p align="center"><img src="docs/media/music-compact.webp" alt="The collapsed music pill with the cover flip and glow" width="640"></p>
 
+Start a timer while music plays and the second activity buds off into its own bubble, then melts
+back in when it's done. A download or a second player does the same.
+
+<p align="center"><img src="docs/media/split.webp" alt="A timer bubble splitting off the music pill and merging back in" width="640"></p>
+
 ## Ask anything
 
 Press `Ctrl+Alt+Space` and the island becomes a Siri-style search bar. Type or speak a question and
@@ -59,7 +64,8 @@ photos from your phone with one click, watch them arrive, and send files back fr
 ## Notifications that feel native
 
 Windows notifications become island banners. Messaging apps like Discord and WhatsApp show the
-sender's profile picture and any image they sent. Swipe one away, or click it to open the app.
+sender's profile picture and any image they sent, and a new message replaces the one on screen
+right away. Swipe one away, or click it to open the app.
 
 <p align="center"><img src="docs/media/discord.webp" alt="Discord messages arriving as island banners with profile pictures" width="880"></p>
 
@@ -79,6 +85,7 @@ Connect AirPods or Beats and the island plays a 360° animation of your exact mo
 ## Volume, brightness and the rest
 
 Windows' pop-ups, replaced: volume and brightness bars, a Ring / Silent pill for mute, and Caps Lock.
+With the music player open, the volume keys add a volume row under it instead.
 
 <p align="center"><img src="docs/media/hud.webp" alt="Volume, mute, brightness and Caps Lock pills" width="640"></p>
 
@@ -126,12 +133,14 @@ and run it. Islander updates itself from then on. Right-click the island for Set
 - **Shape**: squircle (continuous-curvature) outline that becomes a true capsule when collapsed. Content
   sits in a fixed frame, so text never jitters while the shape morphs.
 - **Put it anywhere**: drag the island to the top, bottom, left or right edge of the screen; drop zones
-  show where it will land. On the sides it becomes a slim vertical pill (with a horizontal waveform).
+  show where it will land. On the sides it becomes a slim vertical pill (with a horizontal waveform),
+  with the same cover glow and turn, and a second activity's bubble underneath.
   Also from the island's menu (Move Island…) or Settings → Position.
 - **Hairline rim**: a thin outline that tints with what the island is doing: red when muted, orange for
   timers, yellow for the stopwatch, green for downloads and Focus breaks.
 - **Idle styles**: a waterdrop notch attached to the screen edge, a dot, or the classic pill.
-- **Split bubble**: a second live activity pinches off into a bubble with a gooey bridge.
+- **Split bubble**: a second live activity grows out from behind the island into its own bubble with a
+  gooey bridge, and melts back in. In a right-hand corner it buds off to the left, toward the screen.
 - **Smart overlay window**: transparent, always on top, never steals focus, not in Alt+Tab or the
   taskbar. Click-through everywhere except the island.
 - **Smooth from the first hover**: right after launch every panel is prepared once, invisibly, so the
@@ -145,10 +154,10 @@ and run it. Islander updates itself from then on. Right-click the island for Set
 ### Tabs (scroll to switch; each can be turned off and reordered)
 | Tab | What it does |
 |---|---|
-| **Search or Ask** | Siri-style AI bar. Works out of the box with **no API key** through Islander's free service, with live web, news and sports-score lookups. **Ask by voice**: tap the mic, speak, and it asks when you pause. Short answers, sources, follow-ups and a remembered conversation; shrinks to a glowing circle while thinking. Maths and unit conversions (`12 km to mi`) are answered instantly on your PC. Optional real **liquid glass**. |
+| **Search or Ask** | Siri-style AI bar. Works out of the box with **no API key** through Islander's free service, with live web, news and sports-score lookups. **Ask by voice**: tap the mic, speak, and it asks when you pause. Short answers, sources, follow-ups and a remembered conversation; shrinks to a glowing circle while thinking. After an answer, just type to ask again, or press Backspace for a fresh question. Maths and unit conversions (`12 km to mi`) are answered instantly on your PC. Optional real **liquid glass**. |
 | **Now Playing** | Media from every app (Spotify, browsers, mpv, Stremio…) with artwork (movie and series posters for mpv/Stremio), a 5-bar waveform driven by the real audio (iOS-style, quiet when the music is quiet), 3D cover flip, a draggable scrubber, rolling-digit timestamps, a **LIVE** bar for streams, source switching, an output-device picker and click-to-open the app. |
 | **Downloads** | Appears while something downloads: browser downloads (via the extension), **Mister Download Manager** and **Internet Download Manager**. Hover for every download with progress and speed, cancel one, or click a finished one to open its folder. |
-| **Today** | Month calendar, a weather glance (Open-Meteo, no key) with a sun or moon that playfully follows your cursor, and your next reminders. |
+| **Today** | Month calendar, a weather glance (Open-Meteo, no key; located by Windows' location service, or set your city) with a sun or moon that playfully follows your cursor, and your next reminders. |
 | **Timer & Focus** | iOS Clock-style timer, stopwatch (with laps) and Focus (Pomodoro). Keeps running as a live pill while collapsed and chimes when done. |
 | **Notes & To-Do** | A quick scratchpad and a Reminders-style checklist, saved automatically. |
 | **Shelf** | Drop files, folders or images on the island, then drag them out into any app. Open, show in Explorer, remove, and convert images to JPG/PNG/WebP. **Nearby sharing**: phones and computers running [LocalSend](https://localsend.org) show up under the Shelf; tap one to send your files, or receive from them (you're asked first; files land in Downloads and on the Shelf). |
@@ -159,7 +168,7 @@ and run it. Islander updates itself from then on. Right-click the island for Set
 ### Live activities & system
 - **Notifications**: Windows notifications appear as island banners with the app icon; for messaging
   apps (Discord, WhatsApp…) the sender's picture with the app as a badge, like iOS. Swipe to dismiss,
-  click to open. Do Not Disturb silences them.
+  click to open. Do Not Disturb silences them. Timer and Focus alerts show even over an open panel.
 - **Replaces Windows' popups** (optional): the volume/media keys and notification banners are handled by
   the island, and Windows' own volume popup stays hidden. Your settings are restored when you quit.
 - **Volume & mute pills**, plus Caps Lock and Num Lock pills.

@@ -1,8 +1,8 @@
-Islander 0.9.2 — a Dynamic Island for Windows
+Islander 0.9.3 — a Dynamic Island for Windows
 ==============================================
 
 INSTALL
-1. Run "Islander_0.9.2_x64-setup.exe".
+1. Run "Islander_0.9.3_x64-setup.exe".
    (Windows may say "Windows protected your PC" because the installer isn't
    code-signed yet: click "More info" → "Run anyway".)
 2. Islander starts right away and opens automatically when you sign in.

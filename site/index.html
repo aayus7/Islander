@@ -60,14 +60,32 @@ p { margin: 0; text-wrap: pretty; }
 .logo { width: 46px; height: 17px; border-radius: 99px; background: #000; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22); position: relative; flex: none; }
 .logo::after { content: ""; position: absolute; right: 3px; top: 3px; width: 11px; height: 11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffc672, var(--amber) 60%, #e67800); box-shadow: 0 0 10px rgba(255, 159, 10, 0.6); }
 .nav-links { display: flex; align-items: center; gap: 6px; }
-.nav-links a { text-decoration: none; color: var(--mute); font-size: 15px; padding: 8px 12px; border-radius: 99px; transition: color 0.2s, background 0.2s; }
-.nav-links a:hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 0 22px; border-radius: 99px; text-decoration: none; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; border: 0; cursor: pointer; font-family: inherit; transition: transform 0.25s cubic-bezier(.2,.8,.2,1), box-shadow 0.25s, background 0.25s; }
-.btn:active { transform: scale(0.97); }
+.nav-links a:not(.btn) { text-decoration: none; color: var(--mute); font-size: 15px; padding: 8px 12px; border-radius: 99px; transition: color 0.2s, background 0.2s; }
+.nav-links a:not(.btn):hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
+.btn { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 0 22px; border-radius: 99px; text-decoration: none; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; border: 0; cursor: pointer; font-family: inherit; overflow: hidden;
+  --mx: 0px; --my: 0px; --s: 1; --px: 50%; --py: 50%; --hl: 0;
+  transform: translate3d(var(--mx), var(--my), 0) scale(var(--s));
+  transition: box-shadow 0.35s, background 0.35s, transform 0.55s cubic-bezier(.3, 1.6, .5, 1); will-change: transform; }
+.btn.magnet { transition: box-shadow 0.35s, background 0.35s, transform 0.12s linear; }
+.btn .btn-in { display: inline-flex; align-items: center; gap: 10px; position: relative; z-index: 2; transform: translate3d(calc(var(--mx) * 0.45), calc(var(--my) * 0.45), 0); transition: transform 0.55s cubic-bezier(.3, 1.6, .5, 1); }
+.btn.magnet .btn-in { transition: transform 0.12s linear; }
+.btn:active { --s: 0.95; }
+/* light that follows the cursor */
+.btn::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 1; pointer-events: none; opacity: var(--hl); transition: opacity 0.35s;
+  background: radial-gradient(120px circle at var(--px) var(--py), rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%); mix-blend-mode: soft-light; }
+/* a slow sheen sweeping across the chrome buttons, so they never sit still */
+.btn-chrome::after { content: ""; position: absolute; top: -20%; bottom: -20%; left: -60%; width: 45%; z-index: 1; pointer-events: none;
+  background: linear-gradient(100deg, rgba(60, 60, 72, 0) 0%, rgba(60, 60, 72, 0.16) 30%, rgba(255, 255, 255, 0.95) 50%, rgba(60, 60, 72, 0.16) 70%, rgba(60, 60, 72, 0) 100%);
+  transform: skewX(-18deg); animation: sheen 5.5s cubic-bezier(.45, 0, .2, 1) infinite; animation-delay: var(--sheen-delay, 1.2s); }
+@keyframes sheen { 0% { left: -60%; } 28%, 100% { left: 130%; } }
 .btn-chrome { color: #0a0a0c; background: linear-gradient(180deg, #ffffff 0%, #e7e7ea 45%, #b9b9c0 100%); box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 10px 30px -10px rgba(255, 255, 255, 0.35); }
-.btn-chrome:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 16px 40px -10px rgba(255, 255, 255, 0.45); }
+.btn-chrome:hover { --s: 1.025; box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 18px 46px -10px rgba(255, 255, 255, 0.55), 0 0 0 6px rgba(255, 255, 255, 0.06); }
+.btn-chrome:active { --s: 0.95; }
 .btn-ghost { color: var(--ink); background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line-2); }
-.btn-ghost:hover { background: rgba(255, 255, 255, 0.1); }
+.btn-ghost::before { mix-blend-mode: normal; background: radial-gradient(110px circle at var(--px) var(--py), rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 70%); }
+.btn-ghost:hover { --s: 1.02; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); }
+.btn-ghost:active { --s: 0.95; }
+@media (prefers-reduced-motion: reduce) { .btn-chrome::after { animation-duration: 11s; } }
 .nav .btn { min-height: 40px; padding: 0 18px; font-size: 15px; }
 .win { width: 16px; height: 16px; flex: none; }
 
@@ -82,7 +100,7 @@ p { margin: 0; text-wrap: pretty; }
 .hero h1 { font-size: clamp(54px, 9.4vw, 132px); }
 .hero h1 .chrome { font-size: 1.12em; }
 .lede { max-width: 620px; color: rgba(245, 245, 247, 0.78); font-size: clamp(18px, 1.6vw, 21px); line-height: 1.5; }
-.ctas { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.ctas { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; color: var(--mute); font-size: 14px; }
 .meta span { display: inline-flex; align-items: center; gap: 8px; }
 .meta span + span::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: var(--faint); margin-right: 10px; }
@@ -216,7 +234,7 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
       <a href="#features">Features</a>
       <a href="#craft" class="hide-s">1:1</a>
       <a href="https://github.com/aayus7/Islander">GitHub</a>
-      <a class="btn btn-chrome" href="https://github.com/aayus7/Islander/releases/latest">Download</a>
+      <a class="btn btn-chrome" style="--sheen-delay: 0.6s" href="https://github.com/aayus7/Islander/releases/latest">Download</a>
     </nav>
   </div>
 </header>
@@ -439,6 +457,49 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
   addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
+  /* ---------- buttons: magnetic pull, light that follows the cursor ---------- */
+  (() => {
+    const btns = [...document.querySelectorAll(".btn")];
+    for (const b of btns) {
+      // wrap the label so it can lean a little further than the button (depth)
+      const inner = document.createElement("span"); inner.className = "btn-in";
+      while (b.firstChild) inner.appendChild(b.firstChild);
+      b.appendChild(inner);
+    }
+    const fine = matchMedia("(hover: hover) and (pointer: fine)").matches;
+    if (!fine) return;
+    const PULL = reduce ? 0.12 : 0.3, MAXD = reduce ? 3 : 7, REACH = 46;
+    let raf = 0, px = -1e4, py = -1e4;
+    const step = () => {
+      raf = 0;
+      for (const b of btns) {
+        const r = b.getBoundingClientRect();
+        if (r.bottom < -80 || r.top > innerHeight + 80) continue;
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const inside = px > r.left - REACH && px < r.right + REACH && py > r.top - REACH && py < r.bottom + REACH;
+        if (inside) {
+          const k = b.closest(".nav") ? 0.8 : 1; // the nav's button is smaller: a slightly lighter pull
+          const dx = Math.max(-MAXD, Math.min(MAXD, (px - cx) * PULL * k));
+          const dy = Math.max(-MAXD * 0.7, Math.min(MAXD * 0.7, (py - cy) * PULL * 0.8 * k));
+          b.classList.add("magnet");
+          b.style.setProperty("--mx", dx.toFixed(2) + "px");
+          b.style.setProperty("--my", dy.toFixed(2) + "px");
+          b.style.setProperty("--px", (px - r.left) + "px");
+          b.style.setProperty("--py", (py - r.top) + "px");
+          b.style.setProperty("--hl", px >= r.left && px <= r.right && py >= r.top && py <= r.bottom ? "1" : "0.35");
+        } else if (b.classList.contains("magnet")) {
+          // let go: spring back home with a little overshoot (the CSS transition does it)
+          b.classList.remove("magnet");
+          b.style.setProperty("--mx", "0px"); b.style.setProperty("--my", "0px"); b.style.setProperty("--hl", "0");
+        }
+      }
+    };
+    const kick = () => { if (!raf) raf = requestAnimationFrame(step); };
+    addEventListener("pointermove", (e) => { px = e.clientX; py = e.clientY; kick(); }, { passive: true });
+    addEventListener("scroll", kick, { passive: true });
+    document.addEventListener("pointerleave", () => { px = py = -1e4; kick(); });
+  })();
+
   /* ---------- the trailer ---------- */
   const fv = document.getElementById("film-video"), fp = document.getElementById("film-play"), po = document.getElementById("film-poster");
   fp.addEventListener("click", () => {
@@ -518,15 +579,15 @@ void main(){
       const r = canvas.getBoundingClientRect();
       tx = ((ev.clientX - r.left) - r.width / 2) / r.height * .62; ty = -(((ev.clientY - r.top) - r.height / 2) / r.height * .62) + 0.05;
     });
-    new IntersectionObserver((es) => { visible = es[0].isIntersecting; if (visible && !reduce) requestAnimationFrame(draw); }).observe(canvas);
+    new IntersectionObserver((es) => { const was = visible; visible = es[0].isIntersecting; if (visible && !was) requestAnimationFrame(draw); }).observe(canvas);
     function draw(now) {
       mx += (tx - mx) * 0.04; my += (ty - my) * 0.04;
       gl.uniform2f(uR, canvas.width, canvas.height);
-      gl.uniform1f(uT, reduce ? 12.0 : (now - t0) / 1000);
+      gl.uniform1f(uT, ((now - t0) / 1000) * (reduce ? 0.35 : 1));
       gl.uniform2f(uM, mx, my);
       gl.uniform1f(uS, opts.slope || 0.55);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      if (visible && !reduce) requestAnimationFrame(draw);
+      if (visible) requestAnimationFrame(draw);
     }
     requestAnimationFrame(draw);
   }

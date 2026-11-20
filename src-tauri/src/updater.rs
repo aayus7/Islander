@@ -1,6 +1,7 @@
 //! Automatic updates (release builds).
 //!
-//! A while after start, and then every few hours, Islander asks the release feed
+//! A few seconds after every start (retrying while the network comes up), and then every
+//! few hours, Islander asks the release feed
 //! (`latest.json` in the GitHub releases, see tauri.conf.json → plugins.updater) whether
 //! there's a newer version. If there is, it downloads and verifies it in the background
 //! (it's signed with the project's updater key), then tells the island
@@ -26,9 +27,19 @@ pub fn spawn(app: AppHandle) {
         return; // development builds don't update themselves
     }
     tauri::async_runtime::spawn(async move {
-        tokio_sleep(25).await;
+        // Every launch (Windows startup included): ask soon after the island is up.
+        tokio_sleep(6).await;
         loop {
-            let _ = check(&app).await;
+            // At sign-in the network is often not up yet: keep trying for a while
+            // (every minute, up to 15 tries) before falling back to the 6-hour rhythm.
+            for attempt in 0..15 {
+                if check(&app).await.is_ok() {
+                    break;
+                }
+                if attempt < 14 {
+                    tokio_sleep(60).await;
+                }
+            }
             tokio_sleep(6 * 3600).await;
         }
     });
@@ -40,8 +51,11 @@ async fn tokio_sleep(secs: u64) {
 
 /// Check, and download if there's something new. Returns the status text.
 async fn check(app: &AppHandle) -> Result<String, String> {
-    if let Some((u, _)) = PENDING.lock().unwrap().as_ref() {
-        return Ok(format!("ready:{}", u.version));
+    // Already downloaded and still not installed: ask again (a gentle reminder).
+    let pending = PENDING.lock().unwrap().as_ref().map(|(u, _)| (u.version.clone(), u.body.clone().unwrap_or_default()));
+    if let Some((version, notes)) = pending {
+        let _ = app.emit("update://ready", serde_json::json!({ "version": version, "notes": notes }));
+        return Ok(format!("ready:{version}"));
     }
     set_status(app, "checking");
     let updater = app.updater().map_err(|e| e.to_string())?;

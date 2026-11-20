@@ -529,11 +529,11 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   // Turning speech into text looks exactly like thinking: the island shrinks to its circle.
   const aiThinking = mode === "ai" && (aiStatus === "thinking" || aiVoice === "transcribing");
 
-  // A new version finished downloading in the background: offer it once.
+  // A new version is downloaded and waiting: ask (every launch, and again every few hours).
   useEffect(
     () =>
       on<{ version: string }>("update://ready", ({ version }) =>
-        pushBanner({
+        pushBannerNow({
           id: `update-${version}`,
           app: "Software Update",
           title: `Islander ${version} is ready`,
@@ -542,7 +542,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
           glyph: "update",
           tint: "#1c1c1e",
           action: "update",
-          ttl: 15000,
+          ttl: 30000,
         }),
       ),
     [],
@@ -982,7 +982,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         className="island-backdrop"
         width={WIN_W}
         height={FRAME_H + SHADOW_PAD}
-        style={{ top: TOP, marginLeft: -WIN_W / 2 }}
+        style={{ top: 0, marginLeft: -WIN_W / 2 }}
         initial={false}
         animate={{ opacity: mode === "expanded" || mode === "ai" || mode === "incoming" || mode === "rec" || lifted ? 1 : 0 }}
         transition={{ duration: mode === "expanded" || mode === "ai" || mode === "incoming" || mode === "rec" ? 0.35 : 0.25, ease: [0.25, 0.1, 0.25, 1] }}
@@ -996,7 +996,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
             <feGaussianBlur stdDeviation={13} />
           </filter>
         </defs>
-        <motion.path d={rimPath} fill="rgba(0,0,0,0.38)" filter="url(#island-shadow)" style={{ x: (WIN_W - FRAME_W) / 2, y: 10 }} />
+        {/* The filter sits on an unshifted group, and the layer starts at the window's top
+            edge: a filter region in userSpaceOnUse is measured in the filtered element's own
+            coordinates, so on the shifted path it began at the shape's left/top edge and cut
+            the blur off there in a straight line. */}
+        <g filter="url(#island-shadow)">
+          <motion.path d={rimPath} fill="rgba(0,0,0,0.38)" style={{ x: (WIN_W - FRAME_W) / 2, y: TOP + 10 }} />
+        </g>
       </motion.svg>
 
       <motion.div

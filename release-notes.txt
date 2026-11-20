@@ -1,29 +1,19 @@
-Islander 0.9.1
+Islander 0.9.2
 
-New: screen recording
-- Record your screen from Controls, iPhone-style: a 3, 2, 1 countdown, then a red rim around the island while it records.
-- Hover the island to pause, resume or stop. The recording is saved to Videos > Screen Recordings; click the banner to show it.
-- Small files in sharp quality (hardware H.264 at 60 fps) with your PC's sound.
-- HDR screens are converted to normal colours, so recordings never look washed out.
-- Settings > General > "Show in screen recordings" chooses whether the island appears in your videos.
+Browser tabs in the island
+- Islander Media Bridge is now on the Chrome Web Store (Chrome, Edge, Brave, Opera) and Firefox Add-ons. It shows what's playing in your browser tabs, with artwork, controls, live streams and downloads.
+- The first time something plays in a browser without the extension, the island offers it once. Settings > About shows Add to Chrome / Add to Firefox, or Connected.
+- Cancel a browser download straight from the island.
 
-Ask: up-to-date answers out of the box
-- The assistant looks things up before answering (web results, news, Wikipedia, live crypto prices), so questions like "is GTA 6 out yet?" get today's answer.
-- No API key needed. A key of your own in Settings > AI is now only a backup.
-- It knows your local date and time, so "tomorrow" and "tonight" are right.
-- The liquid glass bar now also shows up in screenshots and recordings.
+Updates
+- Islander checks for updates every time it starts, including with Windows, and keeps trying until your connection is up.
+- When an update is ready, the island asks each time you start Islander until you install it. Nothing installs without your click.
 
-New: send files to your phone from the Shelf
-- Nearby phones and computers running the free LocalSend app (iPhone, Android, Mac, Windows, Linux) appear under the Shelf. Pick one and choose which files to send.
-- Phones can send to your PC too: the island asks first. Accepted files go to your Downloads folder and appear on the Shelf.
-- If Windows Firewall blocks phones, the Shelf shows "Can't receive". Tap it once to allow phones on your network.
-
-Fixes
-- Fixed a crash right after the AI answered a question.
-- The AI bar no longer blinks black when it opens, and its shadow is soft like the other tabs.
-- The island hides when a browser video (like YouTube) goes fullscreen.
-- Photos dragged from a browser onto the Shelf no longer vanish after a second.
-- Files deleted from your PC disappear from the Shelf, and a file's actions no longer spill out of it.
-- "Show in folder" opens the right folder instead of Documents.
-
-Islander is now free software under the GNU GPL v3.0 or later.
+Polish and fixes
+- New app icon.
+- The shadow around the open island fades out evenly on every side (it was cut off in a straight line on the left).
+- The collapsed music pill turns the album cover on track changes, like the open island.
+- Hiding the island first tells you how to bring it back.
+- The island's outline no longer skips a frame mid-animation.
+- Bluetooth: friendlier device names, no duplicates, and more reliable connecting. Wi-Fi fixes.
+- Smoother touchpad gestures and better placement on every screen edge.

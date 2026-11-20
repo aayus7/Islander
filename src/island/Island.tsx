@@ -17,7 +17,7 @@ import { StatsPanel } from "./modules/Stats";
 import { ControlsPanel } from "./modules/Controls";
 import { Banner, useBanners, BANNER_H, pushBanner, pushBannerNow, dismissBanner } from "./modules/Banners";
 import { on, send } from "../lib/native";
-import { Hud, useHud, quietHud, HUD_SIZE, MUTE_SIZE } from "./modules/Hud";
+import { Hud, useHud, quietHud, HUD_SIZE, MUTE_SIZE, Speaker } from "./modules/Hud";
 import { DeviceActivity, PowerActivity, useActivity, DEVICE_SIZE, POWER_SIZE } from "./modules/Devices";
 import { PrivacyDots } from "./modules/Privacy";
 import { DownloadCompact, DownloadMinimal, DownloadsPanel, downloadsPanelHeight, useDownloads } from "./modules/Downloads";
@@ -523,6 +523,10 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                 ? "compact"
                 : "idle";
 
+  // Volume keys while the media page is open: the island grows a volume row underneath
+  // instead of swapping to the HUD pill (useHud clears it again after a moment).
+  const mediaVol = mode === "expanded" && tab === "media" && hud && (hud.kind === "volume" || hud.kind === "mute") ? hud : null;
+
   // While Gemini thinks, the island shrinks to just the glowing dot spinner, then
   // springs open again when the answer starts arriving.
   const { status: aiStatus, voice: aiVoice } = useAiSession();
@@ -601,7 +605,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         : { w: AI_W, h: aiH, r: aiView === "search" ? aiH / 2 : 40 }
       : mode === "expanded"
         ? tab === "media"
-          ? { ...SIZES.media, h: SIZES.media.h + mediaExtra }
+          ? { ...SIZES.media, h: SIZES.media.h + mediaExtra + (mediaVol ? MEDIA_VOL_H : 0) }
           : tab === "controls"
             ? { ...SIZES.controls, h: SIZES.controls.h + controlsExtra }
           : tab === "shelf"
@@ -1117,6 +1121,23 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                 onExtraHeight={setMediaExtra}
               />
             )}
+            {mode === "expanded" && tab === "media" && (
+              <AnimatePresence>
+                {mediaVol && (
+                  <motion.div
+                    key="media-vol"
+                    className="media-vol"
+                    style={{ top: SIZES.media.h + mediaExtra - 4, width: SIZES.media.w }}
+                    initial={{ opacity: 0, y: -8, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, y: -6, filter: "blur(3px)", transition: { duration: 0.16 } }}
+                    transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                  >
+                    <MediaVolume muted={mediaVol.on} value={mediaVol.value} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            )}
             {mode === "expanded" && tab === "downloads" && <DownloadsPanel items={dlItems} width={SIZES.downloads.w} height={target.h} />}
             {mode === "expanded" && tab === "today" && <TodayPanel width={SIZES.today.w} height={SIZES.today.h} />}
             {mode === "expanded" && tab === "weather" && <WeatherPanel width={SIZES.weather.w} height={SIZES.weather.h} />}
@@ -1296,5 +1317,23 @@ function Waterdrop({ att, fill }: { att: MotionValue<number>; fill: string }) {
     <svg className="notch" width={W} height={40} style={{ marginLeft: -W / 2 }}>
       <motion.path d={d} fill={fill} />
     </svg>
+  );
+}
+
+/** Height the media page grows by while the volume row shows. */
+const MEDIA_VOL_H = 34;
+
+function MediaVolume({ muted, value }: { muted: boolean; value: number }) {
+  const level = muted ? 0 : value;
+  return (
+    <div className="media-vol-row">
+      <span className="media-vol-ico">
+        <Speaker level={level} muted={muted} />
+      </span>
+      <div className="hud-bar">
+        <motion.div className="hud-fill" initial={false} animate={{ width: `${Math.round(level * 100)}%` }} transition={{ type: "spring", stiffness: 600, damping: 40 }} />
+      </div>
+      <span className="media-vol-num">{muted ? "Muted" : Math.round(level * 100)}</span>
+    </div>
   );
 }

@@ -358,9 +358,17 @@ export function MediaExpanded({
 
   return (
     <div className={`media-x${returning ? " returning" : ""}`} style={{ width, minHeight: height }}>
-      <div className="row" style={{ gap: 14, height: artH }}>
+      <motion.div className="row" style={{ gap: 14 }} initial={false} animate={{ height: artH }} transition={SOURCE_SPRING}>
         {/* Like iOS Music: the cover eases back a touch when paused, springs forward on play. */}
-        <motion.div ref={coverEl} style={{ position: "relative", width: artW, height: artH, flexShrink: 0, borderRadius: tall || wide ? 10 : 14 }}>
+        {/* Another source with differently shaped art (a wide video, a tall poster): the
+            cover resizes smoothly and everything beside it slides along. */}
+        <motion.div
+          ref={coverEl}
+          style={{ position: "relative", flexShrink: 0, borderRadius: tall || wide ? 10 : 14 }}
+          initial={false}
+          animate={{ width: artW, height: artH }}
+          transition={SOURCE_SPRING}
+        >
           {returning && smallSrc && (
             <motion.img
               className="cover-hi cover-landing"
@@ -375,7 +383,7 @@ export function MediaExpanded({
           <motion.div
             className="open-src"
             title="Show the cover"
-            style={{ position: "relative", width: artW, height: artH, isolation: "isolate", display: "flex", justifyContent: "center" }}
+            style={{ position: "relative", width: "100%", height: "100%", isolation: "isolate", display: "flex", justifyContent: "center" }}
             initial={false}
             animate={{ scale: cur.playing ? 1 : 0.93 }}
             whileTap={{ scale: cur.playing ? 0.94 : 0.88 }}
@@ -399,17 +407,26 @@ export function MediaExpanded({
           }}
         >
           {/* Shared with the cover card: these glide between here and under the big cover. */}
-          <motion.div ref={titleEl} style={{ minWidth: 0 }}>
-            <Marquee text={session.title || "Unknown title"} className="title" />
+          {/* Switching source: the old title and artist blur out as the new ones blur in. */}
+          <motion.div ref={titleEl} style={{ minWidth: 0, display: "grid" }}>
+            <AnimatePresence initial={false}>
+              <motion.div key={session.id} style={{ gridArea: "1 / 1", minWidth: 0 }} {...SOURCE_FADE}>
+                <Marquee text={session.title || "Unknown title"} className="title" />
+              </motion.div>
+            </AnimatePresence>
           </motion.div>
-          <motion.div ref={artistEl} style={{ minWidth: 0 }}>
-            <Marquee text={session.artist || session.app} className="subtitle" />
+          <motion.div ref={artistEl} style={{ minWidth: 0, display: "grid" }}>
+            <AnimatePresence initial={false}>
+              <motion.div key={session.id} style={{ gridArea: "1 / 1", minWidth: 0 }} {...SOURCE_FADE}>
+                <Marquee text={session.artist || session.app} className="subtitle" />
+              </motion.div>
+            </AnimatePresence>
           </motion.div>
         </div>
         <div className="mx-fade" style={{ width: 36, display: "flex", justifyContent: "flex-end", alignSelf: "center" }}>
           <Waveform playing={cur.playing} color={color} bars={6} height={20} barWidth={3} gap={2.2} />
         </div>
-      </div>
+      </motion.div>
 
       {timeline && <div ref={scrubEl}>{timeline}</div>}
 
@@ -1250,3 +1267,12 @@ function LivingBg({ src: art }: { src: string | null }) {
     </div>
   );
 }
+
+/** Switching between sources in the player: the cover's size and the row's height. */
+const SOURCE_SPRING = { type: "spring" as const, stiffness: 320, damping: 32, mass: 0.8 };
+/** …and the title/artist crossfade. */
+const SOURCE_FADE = {
+  initial: { opacity: 0, filter: "blur(4px)", y: 4 },
+  animate: { opacity: 1, filter: "blur(0px)", y: 0, transition: { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] as const } },
+  exit: { opacity: 0, filter: "blur(4px)", y: -4, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] as const } },
+};

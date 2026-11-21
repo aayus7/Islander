@@ -327,7 +327,7 @@ fn main() {
     let builder = tauri::Builder::default();
     // Release: one Islander at a time. Opening it again (Start menu, desktop shortcut)
     // brings up Settings in the copy that's already running, like any desktop app, and
-    // brings the island back if it was hidden (there's no tray icon to do that from).
+    // brings the island back if it was hidden (the tray icon can do that too).
     #[cfg(not(debug_assertions))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         let state = app.state::<St>();
@@ -523,6 +523,10 @@ fn main() {
             power::spawn(app.handle().clone());
             radios::spawn(app.handle().clone());
             localsend::spawn(app.handle().clone(), s.nearby_sharing, s.nearby_name.clone());
+            // Tray icon: a way back to Settings, and to show/hide or quit, from the taskbar.
+            if let Err(e) = build_tray(app.handle()) {
+                log_line(format!("tray: {e}"));
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -602,6 +606,44 @@ fn register_hotkey(app: &AppHandle, old: &str, new: &str) {
         }
         Err(e) => eprintln!("invalid hotkey {new}: {e}"),
     }
+}
+
+/// Islander's icon in the taskbar's notification area. Left-click opens Settings; the menu
+/// shows or hides the island, opens Settings, or quits.
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let toggle = MenuItem::with_id(app, "tray_toggle", "Show / hide island", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "tray_settings", "Settings…", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "tray_quit", "Quit Islander", true, None::<&str>)?;
+    let sep = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&toggle, &settings, &sep, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("islander")
+        .tooltip("Islander")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, ev| match ev.id().as_ref() {
+            "tray_toggle" => {
+                let state = app.state::<St>();
+                let hide = !state.hidden.load(Ordering::Relaxed);
+                set_island_hidden(app, &state, hide, "tray menu");
+            }
+            "tray_settings" => {
+                let _ = open_settings_window(app);
+            }
+            "tray_quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, ev| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
+                let _ = open_settings_window(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
 }
 
 fn set_island_hidden(app: &AppHandle, state: &St, hidden: bool, why: &str) {

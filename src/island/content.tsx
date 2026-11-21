@@ -1169,6 +1169,11 @@ function MagnetCover({ w, h, radius, playing, children }: { w: number; h: number
   const gx = useTransform(sx, (v) => `${(v + 0.5) * 100}%`);
   const gy = useTransform(sy, (v) => `${(v + 0.5) * 100}%`);
   const glare = useMotionTemplate`radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,0.28), rgba(255,255,255,0) 55%)`;
+  // Drop shadow under the cover, shifting opposite the tilt as if the cover lifts toward
+  // the cursor.
+  const shX = useTransform(sx, (v) => -v * 14);
+  const shY = useTransform(sy, (v) => 16 - v * 10);
+  const shadow = useMotionTemplate`${shX}px ${shY}px 34px -10px rgba(0,0,0,0.6)`;
   const move = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     px.set(Math.max(-0.5, Math.min(0.5, (e.clientX - r.left) / r.width - 0.5)));
@@ -1193,7 +1198,7 @@ function MagnetCover({ w, h, radius, playing, children }: { w: number; h: number
     >
       <motion.div
         className="magnet-tilt"
-        style={{ width: w, height: h, rotateX, rotateY, x, y, borderRadius: radius }}
+        style={{ width: w, height: h, rotateX, rotateY, x, y, borderRadius: radius, boxShadow: shadow }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
       >

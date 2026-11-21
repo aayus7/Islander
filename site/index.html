@@ -168,6 +168,8 @@ section { position: relative; }
 .copy h3 .chrome { font-size: 1.1em; }
 .copy p { color: var(--mute); font-size: 18px; max-width: 460px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.copy p.ext-note { margin-top: 14px; font-size: 14px; color: var(--faint); }
+.ext-note a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .chip { font-size: 13.5px; color: var(--ink); padding: 6px 12px; border-radius: 99px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px var(--line); }
 kbd { font-family: var(--display); font-size: 13.5px; padding: 4px 9px; border-radius: 8px; background: #1c1c21; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--line-2); }
 .screen { position: relative; border-radius: 26px; overflow: hidden; background: #0b0d18; box-shadow: 0 0 0 1px var(--line-2), 0 50px 100px -40px rgba(0, 0, 0, 0.95), 0 20px 40px -20px rgba(0, 0, 0, 0.6); }
@@ -315,6 +317,7 @@ html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
           <h3>Your music, <span class="chrome">alive.</span></h3>
           <p>Real album art, a waveform that follows the actual audio, a scrubber you can drag and one tap to switch between apps that are playing.</p>
           <div class="chips"><span class="chip">Spotify</span><span class="chip">YouTube</span><span class="chip">mpv</span><span class="chip">VLC (partial)</span><span class="chip">Any media app</span></div>
+          <p class="ext-note">Browser media and downloads use the free <a href="https://chromewebstore.google.com/detail/islander-media-bridge/godincneomgpbkdeaehkhiimpcmbffce" target="_blank" rel="noopener">Islander Media Bridge</a> extension for Chrome and Edge (Firefox coming soon).</p>
         </div>
         <div class="screen rise"><video class="clip" src="media/clips/music.mp4" poster="media/clips/music.jpg" width="640" height="280" muted loop playsinline preload="none" aria-label="Hovering the island while Spotify plays: it opens to a player, scrubs, and switches to YouTube"></video></div>
       </article>

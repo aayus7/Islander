@@ -25,7 +25,7 @@
   <img src="https://img.shields.io/badge/IDM-1c1c1e?style=flat-square&logo=data:image%2Fpng;base64,iVBORw0KGgoAAAANSUhEUgAAAB0AAAAcCAMAAACqEUSYAAAAwFBMVEUAAAAQJxYWXhPm5qBgnPP4%2B%2ForUGMzWZnd5tkeM2KPrSwgmhwi0RdPZGHh4mKTo6Vb21Onz91XnFybtcnmnF10lyLeZ1Po7uUdNI1JddFuipnm5TNZaSd%2Ff39Sa5lT3jCv0Fax1Z%2Fe4dG5ydLv76morVyqqqqd2Svm7aw9b8SgsLaGeDOlXlWOo7Srrt%2BKqNG3yL3iuT3fpZz%2F%2FwD%2F%2F38AAP8%2Ff788nXRJPC5Xcmx%2Ff%2F9Vqqp3w49%2F%2F%2F9%2BxvX%2Fv79nQbN8AAAAQHRSTlMA%2Fv79%2Fg3%2B%2Fvz%2B%2Fv%2F%2F%2FP7y%2Fvv%2B%2B%2F7%2B%2FV3%2B%2Fvz%2F%2FwL3%2F%2F%2F6l6UF%2FQP%2Fjf9g%2Fv%2BtFJJe%2F%2F8BAgEE%2F%2F%2B%2BAgP%2FAv8EvkjN1QAAAbZJREFUeNpV04t2ojAUBdBL0oQEDAGCDSKCgNZqp9PHvJ%2F9%2F7%2BamwQ7epa6lm5OvMQI8D93AFaIYjCmOFn4wuAyDOwoBMWHuTHFBJtL3AFQH6zfYJ7g67n9abcDu93vaZYhF38dP8LHgJ%2FxaYckSfah68qr5uk8Dhvv6RJ1EH5tr3HnugwXpbR6cLqlmVODeIy5QX2DkVa3t16TbfZejWWD88C9ww%2FtrFkxI5cKBwqogiZb7QwxllLCxtIMVSvSLl2aUHTVKAKsor4KHbVtq5Tqjsc4oFM7ZKg4ZkTasok59%2BQtUiC8vgohI1LmeVmqmTAahhzHrCohmkhyZEyaEuJVQJHnh3X2UlEs89Jx3y8W%2FoJSgPmd94f1ev2S7b%2B3ZbpECklTVG3KxaJfu1QJVtKzEcI1mGb1Dd%2F1hwNuBX7kOHyx0gxE063iNITM8SOpZ%2FzxbdF17gYJuTKORTw7bNQ8rutaSrxP%2Fl48sflcTVpJWfvMSn5Yf0IBfjIYdYfbg6mlR%2FXI4Nf5ROLqhWlwA7niftaJAbs8yMyeJqMbrUkYh12fc%2FfiUvKRXRvmD%2FMzbNj0DJf%2FgX%2BoZCZcZvPbsAAAAABJRU5ErkJggg%3D%3D" alt="Internet Download Manager">
   <img src="https://img.shields.io/badge/LocalSend-1c1c1e?style=flat-square&logo=localsend&logoColor=33a8f5" alt="LocalSend">
   <img src="https://img.shields.io/badge/AirPods%20%26%20Beats-1c1c1e?style=flat-square&logo=apple&logoColor=white" alt="AirPods and Beats">
-  <img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Firefox-1c1c1e?style=flat-square&logo=googlechrome&logoColor=white" alt="Chrome, Edge and Firefox (browser extension)">
+  <a href="https://chromewebstore.google.com/detail/islander-media-bridge/godincneomgpbkdeaehkhiimpcmbffce"><img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Firefox-1c1c1e?style=flat-square&logo=googlechrome&logoColor=white" alt="Chrome, Edge and Firefox (browser extension)"></a>
 </p>
 
 <p align="center">
@@ -246,9 +246,12 @@ push updates to your users, and if you lose it, existing installs can't be updat
 
 ### Browser extension (optional)
 For perfectly synced browser media, live-stream detection, jump-to-tab and browser download progress,
-load the extension in `extension/`:
-- **Firefox**: `about:debugging` → This Firefox → Load Temporary Add-on → `extension/manifest.json`.
-- **Chrome / Edge**: `chrome://extensions` → Developer mode → Load unpacked → the `extension` folder.
+install the **Islander Media Bridge** extension:
+- **Chrome**: [get it from the Chrome Web Store](https://chromewebstore.google.com/detail/islander-media-bridge/godincneomgpbkdeaehkhiimpcmbffce).
+- **Edge**: open the same [Chrome Web Store page](https://chromewebstore.google.com/detail/islander-media-bridge/godincneomgpbkdeaehkhiimpcmbffce), click **Allow extensions from other stores**
+  when Edge asks, then **Add to Chrome**.
+- **Firefox**: coming soon to Firefox Add-ons. Until then: `about:debugging` → This Firefox →
+  Load Temporary Add-on → `extension/manifest.json`.
 
 It only talks to the island on `127.0.0.1`; nothing leaves your PC. Release builds work without it.
 

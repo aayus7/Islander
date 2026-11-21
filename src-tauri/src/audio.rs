@@ -128,6 +128,16 @@ mod imp {
             if failed.load(Ordering::Relaxed) {
                 return Err("stream stopped".into());
             }
+            // The island is hidden (a fullscreen game, or hidden by you): nobody can see the
+            // waveform, so skip the analysis and the updates until it's back.
+            if !crate::ISLAND_SHOWN.load(Ordering::Relaxed) {
+                buf.lock().unwrap().fresh = 0;
+                smooth = [0.0; BANDS];
+                zero_frames = 0; // so a few zero frames go out on return (bars settle)
+                std::thread::sleep(Duration::from_millis(100));
+                last_frame = Instant::now();
+                continue;
+            }
             // Rebuild if the default output changes (e.g. you switch to headphones).
             if last_device_check.elapsed() > Duration::from_secs(2) {
                 last_device_check = Instant::now();
@@ -278,11 +288,13 @@ pub mod meters {
             let mut names: HashMap<u32, String> = HashMap::new();
             let mut enumerator: Option<IMMDeviceEnumerator> = None;
             // The session manager is cached and refreshed every couple of seconds (it follows
-            // the default output device); the meters themselves are read every 50 ms.
+            // the default output device); the meters themselves are read every 100 ms.
             let mut mgr: Option<(IAudioSessionManager2, Instant)> = None;
             let mut last = HashSet::new();
             loop {
-                std::thread::sleep(Duration::from_millis(50));
+                // 10 looks a second: which app is making sound changes on human timescales,
+                // and the media list reacts within a tenth of a second.
+                std::thread::sleep(Duration::from_millis(100));
                 if enumerator.is_none() {
                     enumerator = unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok() };
                 }

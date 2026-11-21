@@ -111,6 +111,25 @@ async fn media_command(id: String, action: String) -> Result<(), String> {
 /// Is the cursor over the island right now? (The island asks when it loads: the hover
 /// may have started before it was listening, e.g. right after startup.)
 static HOVERING: AtomicBool = AtomicBool::new(false);
+/// The island is on screen (not hidden for a fullscreen app or by the user). While it isn't,
+/// the audio meter skips its work: nobody can see the waveform.
+pub(crate) static ISLAND_SHOWN: AtomicBool = AtomicBool::new(true);
+
+/// Hide or show the island window, and tell its page too: a hidden page stops drawing
+/// (animations, the waveform) instead of rendering frames nobody can see. Its timers and
+/// events keep running, so nothing falls out of sync while it's away.
+fn park(win: &WebviewWindow, show: bool) {
+    ISLAND_SHOWN.store(show, Ordering::Relaxed);
+    if show {
+        #[cfg(windows)]
+        win::set_page_visible(win, true);
+        let _ = win.show();
+    } else {
+        let _ = win.hide();
+        #[cfg(windows)]
+        win::set_page_visible(win, false);
+    }
+}
 /// The island is hidden for a fullscreen app, but the volume just changed: show it (without
 /// taking focus) until this moment, in ms since the Unix epoch, so the volume pill appears
 /// over the game or video like Windows' own volume pop-up would.
@@ -594,7 +613,7 @@ fn set_island_hidden(app: &AppHandle, state: &St, hidden: bool, why: &str) {
             let _ = app.emit("island://hover", false);
             let _ = win.set_ignore_cursor_events(true);
             if was {
-                let _ = win.hide();
+                park(&win, false);
             } else {
                 // Say it before going: a hidden island leaves nothing on screen, so without this
                 // a stray shortcut press looks like the app vanished. The island shows how to
@@ -607,14 +626,14 @@ fn set_island_hidden(app: &AppHandle, state: &St, hidden: bool, why: &str) {
                     let state = app.state::<St>();
                     if state.hidden.load(Ordering::Relaxed) {
                         if let Some(win) = app.get_webview_window("island") {
-                            let _ = win.hide();
+                            park(&win, false);
                         }
                     }
                 });
             }
         } else {
             let _ = win.set_ignore_cursor_events(true);
-            let _ = win.show();
+            park(&win, true);
         }
     }
     let _ = app.emit("island://hidden", hidden);
@@ -932,6 +951,17 @@ fn run_move(app: &AppHandle, click: bool) {
     if let Some(z) = &zones {
         let _ = z.hide();
         let _ = z.set_ignore_cursor_events(true);
+        // The drop-zone page is only needed while moving: free it a little later (unless
+        // another move has started), instead of keeping a hidden page in memory for good.
+        let app2 = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(20));
+            if !MOVING.load(Ordering::Relaxed) {
+                if let Some(z) = app2.get_webview_window("zones") {
+                    let _ = z.destroy();
+                }
+            }
+        });
     }
     // Where the window goes: the chosen spot, or back where it was (Esc).
     let (old, new, to) = match last.filter(|_| !cancelled) {
@@ -1001,12 +1031,20 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
         let mut fs_pending = 0u8;
         // Showing just the volume pill over a fullscreen app (see HUD_PEEK_UNTIL).
         let mut peeking = false;
+        // How long to wait before the next look. 60 times a second while the cursor is near
+        // the island (hover has to feel instant); when it's far away, ~25 times a second is
+        // plenty to notice it coming and saves waking the CPU for nothing.
+        let mut nap = 16u64;
+        let mut last_fs_check = Instant::now();
+        let mut last_follow = Instant::now();
         loop {
-            std::thread::sleep(Duration::from_millis(16));
+            std::thread::sleep(Duration::from_millis(nap));
+            nap = 16;
             tick = tick.wrapping_add(1);
 
             #[cfg(windows)]
-            if tick % 30 == 0 && !state.hidden.load(Ordering::Relaxed) && !MOVING.load(Ordering::Relaxed) {
+            if last_fs_check.elapsed() >= Duration::from_millis(500) && !state.hidden.load(Ordering::Relaxed) && !MOVING.load(Ordering::Relaxed) {
+                last_fs_check = Instant::now();
                 if let Some(win) = app.get_webview_window("island") {
                     let want = state.store.get().hide_in_fullscreen && win::fullscreen_in_front(&win);
                     fs_pending = if want != fs_hidden { fs_pending + 1 } else { 0 };
@@ -1023,14 +1061,18 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                         if want {
                             HOVERING.store(false, Ordering::Relaxed);
                             let _ = app.emit("island://hover", false);
-                            let _ = win.hide();
+                            park(&win, false);
                             // Get the volume pill's window ready (loaded, hidden) for this
                             // fullscreen session, so the first key press shows it at once.
                             if let Some(fv) = fsvol_window(&app) {
                                 place_fsvol(&win, &fv);
                             }
                         } else {
-                            let _ = win.show();
+                            park(&win, true);
+                            // The pill window only exists for fullscreen sessions.
+                            if let Some(fv) = app.get_webview_window("fsvol") {
+                                let _ = fv.destroy();
+                            }
                         }
                     }
                 }
@@ -1053,6 +1095,8 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                         win::hide_raw(&fv);
                     }
                 }
+                // Nothing to follow while hidden but the volume keys (and the fullscreen check).
+                nap = if peeking { 16 } else { 33 };
                 continue;
             }
             if state.hidden.load(Ordering::Relaxed) {
@@ -1068,7 +1112,8 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
             };
 
             // Follow mouse: hop to the monitor under the cursor (twice a second, never mid-hover).
-            if tick % 30 == 0 && !interactive && !MOVING.load(Ordering::Relaxed) {
+            if last_follow.elapsed() >= Duration::from_millis(500) && !interactive && !MOVING.load(Ordering::Relaxed) {
+                last_follow = Instant::now();
                 let s = state.store.get();
                 if s.monitor == "follow" {
                     if let Ok(Some(m)) = win.monitor_from_point(cursor.x, cursor.y) {
@@ -1119,6 +1164,17 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                     ui_log(format!("hit: interactive={interactive} (button held) at {lx:.0},{ly:.0}"));
                 }
                 let _ = win.set_ignore_cursor_events(!interactive);
+            }
+            {
+                // Far from the island (and nothing going on): look less often.
+                let h = state.hit.lock().unwrap();
+                let i = h.island;
+                let dx = if lx < i.x { i.x - lx } else if lx > i.x + i.w { lx - (i.x + i.w) } else { 0.0 };
+                let dy = if ly < i.y { i.y - ly } else if ly > i.y + i.h { ly - (i.y + i.h) } else { 0.0 };
+                let far = i.w > 0.0 && dx.max(dy) > 160.0 && h.bubble.is_none();
+                if far && !hovering && !interactive && !held && !MOVING.load(Ordering::Relaxed) {
+                    nap = 40;
+                }
             }
             // Only the island itself expands on hover; the bubble is a click target.
             if on_island != hovering {

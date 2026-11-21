@@ -44,6 +44,16 @@ pub fn hide_raw(win: &tauri::WebviewWindow) {
     }
 }
 
+/// Tell the page whether it's on screen. A hidden window alone doesn't do that here (native
+/// occlusion tracking is switched off for the island), so the page would keep drawing its
+/// animations and waveform at full frame rate while hidden for a game. Marked invisible, it
+/// stops drawing; its timers and events keep running (background throttling is off).
+pub fn set_page_visible(win: &tauri::WebviewWindow, visible: bool) {
+    let _ = win.with_webview(move |wv| unsafe {
+        let _ = wv.controller().SetIsVisible(visible);
+    });
+}
+
 /// A popup menu only closes on outside clicks if its owner window is in the foreground.
 pub fn bring_to_foreground(win: &tauri::WebviewWindow) {
     let Ok(h) = win.hwnd() else { return };

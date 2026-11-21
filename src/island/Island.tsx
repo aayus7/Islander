@@ -231,7 +231,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     const b = on<{ dock: Dock; along: DockAlong }>("move://zone", setPreview);
     const c = on("move://end", () => {
       setPreview(null);
-      justDropped.current = true;
+      justDropped.current = performance.now();
       clearTimeout(hoverTimer.current);
       setHover(false);
       swallowClick.current = true;
@@ -256,11 +256,14 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   const hoverTimer = useRef<number>(0);
   /** Just dropped with the cursor still on it: don't spring open under the cursor.
    *  It opens again normally once the pointer has left it once. */
-  const justDropped = useRef(false);
+  // Only for a moment, though: if the cursor was already off it when you let go, the next
+  // time you reach it must open it (that first hover used to be swallowed).
+  const justDropped = useRef(0);
   const setHoverDelayed = useCallback((v: boolean) => {
     if (justDropped.current) {
-      if (v) return;
-      justDropped.current = false;
+      const fresh = performance.now() - justDropped.current < 700;
+      justDropped.current = 0;
+      if (v && fresh) return;
     }
     clearTimeout(hoverTimer.current);
     hoverTimer.current = window.setTimeout(() => {

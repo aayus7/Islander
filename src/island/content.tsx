@@ -1120,27 +1120,20 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
  */
 function CardGlow({ src, radius }: { src: string | null; radius: number }) {
   useEffect(startAudio, []);
+  // Follows exactly what the waveform bars show (same levels, same curve, same snappy
+  // spring), so the glow moves in step with the bars instead of a guess at the beat.
   const energy = useMotionValue(0);
   useEffect(() => {
-    // Music is loud most of the time, so loudness alone keeps the glow near full. What
-    // reads as a beat is a jump above the song's recent level: track a slow average and
-    // glow by how far the low end rises over it.
-    // Each beat lifts it at once; between beats it fades out gently (a slow release), so it
-    // breathes with the music instead of twitching at every small change.
-    let avg = 0;
-    let env = 0;
     const update = () => {
-      const v = levels.map((l) => l.get());
-      const low = (v[0] + v[1]) / 2;
-      avg += (low - avg) * 0.04;
-      const kick = Math.min(1, Math.max(0, low - avg * 0.75) * 4.5);
-      env = Math.max(kick, env * 0.93);
-      energy.set(env);
+      const v = levels.map((l) => Math.pow(Math.max(0, Math.min(1, l.get())), 0.85));
+      const avg = v.reduce((a, b) => a + b, 0) / v.length;
+      // Stretch the usual range so quiet and loud moments look different.
+      energy.set(Math.max(0, Math.min(1, (avg - 0.12) / 0.6)));
     };
     const offs = levels.map((l) => l.on("change", update));
     return () => offs.forEach((off) => off());
   }, [energy]);
-  const e = useSpring(energy, { stiffness: 180, damping: 24, mass: 0.7 });
+  const e = useSpring(energy, { stiffness: 2400, damping: 70, mass: 0.35 });
   const scale = useTransform(e, (v) => 1.02 + v * 0.12);
   const opacity = useTransform(e, (v) => 0.32 + v * 0.53);
   if (!src) return null;

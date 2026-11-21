@@ -1125,21 +1125,24 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
     // Music is loud most of the time, so loudness alone keeps the glow near full. What
     // reads as a beat is a jump above the song's recent level: track a slow average and
     // glow by how far the low end rises over it.
+    // Each beat lifts it at once; between beats it fades out gently (a slow release), so it
+    // breathes with the music instead of twitching at every small change.
     let avg = 0;
+    let env = 0;
     const update = () => {
       const v = levels.map((l) => l.get());
       const low = (v[0] + v[1]) / 2;
       avg += (low - avg) * 0.04;
-      const kick = Math.max(0, low - avg * 0.75) * 4.5;
-      energy.set(Math.min(1, kick));
+      const kick = Math.min(1, Math.max(0, low - avg * 0.75) * 4.5);
+      env = Math.max(kick, env * 0.93);
+      energy.set(env);
     };
     const offs = levels.map((l) => l.on("change", update));
     return () => offs.forEach((off) => off());
   }, [energy]);
-  // Quick to swell, a softer fall back.
-  const e = useSpring(energy, { stiffness: 320, damping: 26, mass: 0.5 });
-  const scale = useTransform(e, (v) => 1.02 + v * 0.09);
-  const opacity = useTransform(e, (v) => 0.32 + v * 0.38); // peaks at 0.7: full brightness looks harsh
+  const e = useSpring(energy, { stiffness: 180, damping: 24, mass: 0.7 });
+  const scale = useTransform(e, (v) => 1.02 + v * 0.12);
+  const opacity = useTransform(e, (v) => 0.32 + v * 0.68);
   if (!src) return null;
   return (
     <motion.span

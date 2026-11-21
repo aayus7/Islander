@@ -1144,21 +1144,27 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
 function CardGlow({ src: art, radius }: { src: string | null; radius: number }) {
   useEffect(startAudio, []);
   const src = useBlurred(art, "glow");
-  // Follows exactly what the waveform bars show (same levels, same curve, same snappy
-  // spring), so the glow moves in step with the bars instead of a guess at the beat.
-  const energy = useMotionValue(0);
+  // Follows the same levels as the waveform bars, but relative to the song's own recent
+  // level: a loud song sits near the top of the range all the time, so absolute volume
+  // would keep the glow maxed out and still. Instead track a running mean and spread
+  // (about the last second) and glow by how far above or below that the music is now.
+  const energy = useMotionValue(0.5);
   useEffect(() => {
+    let mean = 0;
+    let variance = 0.01;
     const update = () => {
       const v = levels.map((l) => Math.pow(Math.max(0, Math.min(1, l.get())), 0.85));
-      const avg = v.reduce((a, b) => a + b, 0) / v.length;
-      // Stretch the usual range so quiet and loud moments look different.
-      energy.set(Math.max(0, Math.min(1, (avg - 0.08) / 0.45)));
+      const x = v.reduce((a, b) => a + b, 0) / v.length;
+      mean += (x - mean) * 0.05;
+      variance += ((x - mean) ** 2 - variance) * 0.05;
+      const z = (x - mean) / (Math.sqrt(variance) + 0.02);
+      // Silence (paused, quiet passage) rests low; otherwise centred on the song's level.
+      energy.set(x < 0.02 ? 0 : Math.max(0, Math.min(1, 0.45 + z * 0.3)));
     };
     // All six bands are set together on each audio update: recompute once, on the last.
     const off = levels[levels.length - 1].on("change", update);
     return () => off();
   }, [energy]);
-  // A little softer than the bars, so the glow flows rather than flickers.
   const e = useSpring(energy, { stiffness: 900, damping: 55, mass: 0.5 });
   const scale = useTransform(e, (v) => 1.0 + v * 0.24);
   const opacity = useTransform(e, (v) => 0.45 + v * 0.55);

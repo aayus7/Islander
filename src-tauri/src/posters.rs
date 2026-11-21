@@ -401,37 +401,46 @@ fn music_art(artist: &str, title: &str, album: &str) -> Option<Vec<u8>> {
         return None;
     }
     // Among the agreeing results, the one from the same album wins.
-    let pick = |cands: Vec<(String, String, String, String)>| -> Option<String> {
+    let pick = move |cands: Vec<(String, String, String, String)>| -> Option<String> {
         let ok: Vec<_> = cands.into_iter().filter(|(a, t, _, url)| !url.is_empty() && same(&main_artist(a), &want_a) && same(&core_title(t), &want_t)).collect();
         ok.iter().find(|(_, _, al, _)| same(&core_title(al), &want_al)).or_else(|| ok.first()).map(|c| c.3.clone())
     };
-    // Ask both at once (the card is waiting); iTunes wins when it has a match.
-    let (a, t) = (artist.to_string(), title.to_string());
-    let deezer = std::thread::spawn(move || {
-        let q = format!("artist:\"{}\" track:\"{}\"", a.replace('"', ""), t.replace('"', ""));
-        http_get(&format!("https://api.deezer.com/search?limit=15&q={}", encode(&q)))
-            .and_then(|b| serde_json::from_slice::<DeezerResp>(&b).ok())
-            .map(|r| {
-                r.data
-                    .into_iter()
-                    .map(|h| {
-                        // cover_xl is 1000 px; its URL takes any size ("…/1000x1000-…").
-                        let (al, cover) = h.album.map(|a| (a.title, a.cover_xl.replace("1000x1000", &format!("{ART_PX}x{ART_PX}")))).unwrap_or_default();
-                        (h.artist.map(|a| a.name).unwrap_or_default(), h.title, al, cover)
-                    })
-                    .collect::<Vec<_>>()
-            })
-    });
-    let term = format!("{} {}", artist, title);
-    // ART_PX (600): sharp at the card's size, and quick. (Covers are remembered on disk
-    // and per album, so most track changes don't wait for this at all.)
-    let itunes = http_get(&format!("https://itunes.apple.com/search?media=music&entity=song&limit=15&term={}", encode(&term)))
-        .and_then(|b| serde_json::from_slice::<ItunesResp>(&b).ok())
-        .and_then(|r| pick(r.results.into_iter().map(|h| (h.artist, h.track, h.album, h.art.replace("100x100bb", &format!("{ART_PX}x{ART_PX}bb")))).collect()));
-    let url = match itunes {
-        Some(u) => u,
-        None => pick(deezer.join().ok().flatten()?)?,
-    };
+    // Ask both at once and take the first that finds a match (the card is waiting); if the
+    // first to answer has none, wait for the other.
+    let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
+    {
+        let (a, t, tx) = (artist.to_string(), title.to_string(), tx.clone());
+        let pick = pick.clone();
+        std::thread::spawn(move || {
+            let q = format!("artist:\"{}\" track:\"{}\"", a.replace('"', ""), t.replace('"', ""));
+            let found = http_get(&format!("https://api.deezer.com/search?limit=15&q={}", encode(&q)))
+                .and_then(|b| serde_json::from_slice::<DeezerResp>(&b).ok())
+                .and_then(|r| {
+                    pick(
+                        r.data
+                            .into_iter()
+                            .map(|h| {
+                                // cover_xl is 1000 px; its URL takes any size ("…/1000x1000-…").
+                                let (al, cover) = h.album.map(|a| (a.title, a.cover_xl.replace("1000x1000", &format!("{ART_PX}x{ART_PX}")))).unwrap_or_default();
+                                (h.artist.map(|a| a.name).unwrap_or_default(), h.title, al, cover)
+                            })
+                            .collect(),
+                    )
+                });
+            let _ = tx.send(found);
+        });
+    }
+    {
+        let term = format!("{} {}", artist, title);
+        let pick = pick.clone();
+        std::thread::spawn(move || {
+            let found = http_get(&format!("https://itunes.apple.com/search?media=music&entity=song&limit=15&term={}", encode(&term)))
+                .and_then(|b| serde_json::from_slice::<ItunesResp>(&b).ok())
+                .and_then(|r| pick(r.results.into_iter().map(|h| (h.artist, h.track, h.album, h.art.replace("100x100bb", &format!("{ART_PX}x{ART_PX}bb")))).collect()));
+            let _ = tx.send(found);
+        });
+    }
+    let url = rx.iter().take(2).flatten().next()?;
     http_get(&url).filter(|b| b.len() > 2048)
 }
 

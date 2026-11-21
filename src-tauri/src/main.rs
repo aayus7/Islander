@@ -50,8 +50,8 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 /// Island window size in logical px at size scale 1.0. Big enough for the largest
 /// expanded state plus the split bubble.
-const WIN_W: f64 = 560.0;
-const WIN_H: f64 = 640.0; // tall enough for the AI panel and the cover card + tab dock; everything outside the island is click-through
+const WIN_W: f64 = 640.0;
+const WIN_H: f64 = 1000.0; // tall enough for the AI panel and the cover card (posters ~half the screen) + tab dock; everything outside the island is click-through
 /// Extra px around the island that still counts as "on the island".
 const HIT_MARGIN: f64 = 4.0;
 /// Extra slack while the island is open (see the hit tester).
@@ -718,7 +718,7 @@ fn dock_position(mon: &Monitor, s: &Settings) -> PhysicalPosition<i32> {
 
 static MOVING: AtomicBool = AtomicBool::new(false);
 /// Where the island's centre is inside its window (logical px), so it stays under the cursor.
-static ANCHOR: std::sync::Mutex<(f64, f64)> = std::sync::Mutex::new((280.0, 26.0));
+static ANCHOR: std::sync::Mutex<(f64, f64)> = std::sync::Mutex::new((WIN_W / 2.0, 26.0));
 
 #[tauri::command]
 fn island_move_anchor(x: f64, y: f64) {

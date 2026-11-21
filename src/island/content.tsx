@@ -1075,13 +1075,16 @@ const CARD_RADIUS = 30;
 function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { w: number; h: number } | null, playerW: number, base: number) {
   const r = size ? size.h / size.w : 1;
   const full = playerW - CARD_PAD * 2;
-  let w = r > 1.15 ? Math.min(full, Math.round(340 / r)) : full;
+  const tall = r > 1.15;
+  // Posters: about half the screen's height (up to 720 px; the island grows to fit).
+  const posterH = typeof window !== "undefined" ? Math.min(720, Math.max(340, Math.round((window.screen?.height || 1080) * 0.5))) : 340;
+  let w = tall ? Math.round(posterH / r) : full;
   if (!sharp && lo) {
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     w = Math.min(w, Math.round((lo.w / dpr) * 1.25));
   }
-  // Never taller than 340 px, so the card with its volume row fits the island's frame.
-  if (w * r > 340) w = Math.round(340 / r);
+  // Square and wide covers never taller than 340 px.
+  if (!tall && w * r > 340) w = Math.round(340 / r);
   w = Math.max(170, w);
   const h = Math.round(w * r);
   const boxW = w + CARD_PAD * 2;

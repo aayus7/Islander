@@ -33,6 +33,17 @@ pub fn show_no_activate(win: &tauri::WebviewWindow) {
     }
 }
 
+/// Hide again after `show_no_activate`. This has to go straight to Windows too: Tauri still
+/// remembers the island as hidden (from when the fullscreen app came up), so its own hide()
+/// thinks there's nothing to do and the island would stay on screen.
+pub fn hide_raw(win: &tauri::WebviewWindow) {
+    use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
+    let Ok(h) = win.hwnd() else { return };
+    unsafe {
+        let _ = ShowWindow(HWND(h.0 as _), SW_HIDE);
+    }
+}
+
 /// A popup menu only closes on outside clicks if its owner window is in the foreground.
 pub fn bring_to_foreground(win: &tauri::WebviewWindow) {
     let Ok(h) = win.hwnd() else { return };

@@ -997,7 +997,7 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                         win::show_no_activate(&win);
                     } else if !show && peeking {
                         peeking = false;
-                        let _ = win.hide();
+                        win::hide_raw(&win);
                     }
                 }
                 continue;

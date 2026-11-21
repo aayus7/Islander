@@ -174,7 +174,7 @@ function setMockSettings(s: AppSettings) {
 
 const mockBridge: Bridge = {
   isNative: false,
-  windowLabel: typeof location !== "undefined" && location.hash === "#settings" ? "settings" : "island",
+  windowLabel: typeof location !== "undefined" && (location.hash === "#settings" || location.hash === "#fsvol") ? location.hash.slice(1) : "island",
   onMedia: (cb) => mock.subscribe(cb),
   // The preview has no native hit-test; the showcase stage plays that part on its demo bus.
   onHover: (cb) => {

@@ -42,7 +42,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuEvent, SubmenuBuilder};
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, WebviewUrl, WebviewWindow,
+    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
@@ -120,7 +120,8 @@ fn now_ms() -> u64 {
 }
 /// Called on every volume / mute change (hud.rs).
 pub(crate) fn hud_peek() {
-    HUD_PEEK_UNTIL.store(now_ms() + 1900, Ordering::Relaxed);
+    // The pill fades out by itself after 1.6 s; the window goes once that has played.
+    HUD_PEEK_UNTIL.store(now_ms() + 2000, Ordering::Relaxed);
 }
 #[tauri::command]
 fn hover_state() -> bool {
@@ -791,6 +792,48 @@ fn zones_window(app: &AppHandle) -> Option<WebviewWindow> {
     Some(w)
 }
 
+/// The fullscreen volume pill's own window (FsVolume.tsx): transparent, always on top,
+/// click-through and never focused. It only ever draws the volume pill, so changing the
+/// volume over a game or video never brings the island itself up.
+const FSVOL_W: f64 = 320.0;
+const FSVOL_H: f64 = 84.0;
+fn fsvol_window(app: &AppHandle) -> Option<WebviewWindow> {
+    if let Some(w) = app.get_webview_window("fsvol") {
+        return Some(w);
+    }
+    let w = WebviewWindowBuilder::new(app, "fsvol", WebviewUrl::default())
+        .title("Islander volume")
+        .decorations(false)
+        .transparent(true)
+        .background_color(tauri::window::Color(0, 0, 0, 0))
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focused(false)
+        .focusable(false)
+        .resizable(false)
+        .shadow(false)
+        .visible(false)
+        .inner_size(FSVOL_W, FSVOL_H)
+        .additional_browser_args(BROWSER_ARGS)
+        .build()
+        .ok()?;
+    let _ = w.set_ignore_cursor_events(true);
+    #[cfg(windows)]
+    win::apply_overlay_styles(&w);
+    Some(w)
+}
+
+/// Put the pill window at the top centre of the monitor the island is on.
+fn place_fsvol(island: &WebviewWindow, fv: &WebviewWindow) {
+    let Ok(Some(m)) = island.current_monitor() else { return };
+    let s = m.scale_factor();
+    let (mx, my) = (m.position().x, m.position().y);
+    let mw = m.size().width as f64;
+    let w = (FSVOL_W * s).round();
+    let _ = fv.set_size(PhysicalSize::new(w as u32, (FSVOL_H * s).round() as u32));
+    let _ = fv.set_position(PhysicalPosition::new(mx + ((mw - w) / 2.0).round() as i32, my));
+}
+
 #[cfg(windows)]
 fn run_move(app: &AppHandle, click: bool) {
     use windows::Win32::Foundation::POINT;
@@ -971,11 +1014,21 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                         fs_pending = 0;
                         fs_hidden = want;
                         eprintln!("[island] {} [{}]", if want { "hiding: a fullscreen app is in front" } else { "back: fullscreen app closed" }, win::fullscreen_why());
-                        peeking = false;
+                        if peeking {
+                            peeking = false;
+                            if let Some(fv) = app.get_webview_window("fsvol") {
+                                win::hide_raw(&fv);
+                            }
+                        }
                         if want {
                             HOVERING.store(false, Ordering::Relaxed);
                             let _ = app.emit("island://hover", false);
                             let _ = win.hide();
+                            // Get the volume pill's window ready (loaded, hidden) for this
+                            // fullscreen session, so the first key press shows it at once.
+                            if let Some(fv) = fsvol_window(&app) {
+                                place_fsvol(&win, &fv);
+                            }
                         } else {
                             let _ = win.show();
                         }
@@ -986,18 +1039,18 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                 interactive = false;
                 hovering = false;
                 HOVERING.store(false, Ordering::Relaxed);
-                // Volume keys in fullscreen: flash the volume pill, click-through and without
-                // focus, then tuck the island away again.
+                // Volume keys in fullscreen: show only the separate volume pill window
+                // (never the island), click-through and without focus, then hide it again.
                 #[cfg(windows)]
-                if let Some(win) = app.get_webview_window("island") {
+                if let (Some(win), Some(fv)) = (app.get_webview_window("island"), app.get_webview_window("fsvol")) {
                     let show = now_ms() < HUD_PEEK_UNTIL.load(Ordering::Relaxed);
                     if show && !peeking {
                         peeking = true;
-                        let _ = win.set_ignore_cursor_events(true);
-                        win::show_no_activate(&win);
+                        place_fsvol(&win, &fv);
+                        win::show_no_activate(&fv);
                     } else if !show && peeking {
                         peeking = false;
-                        win::hide_raw(&win);
+                        win::hide_raw(&fv);
                     }
                 }
                 continue;

@@ -9,9 +9,11 @@ import { installSmoothScroll } from "./lib/smoothScroll";
 
 const isSettings = bridge.windowLabel === "settings";
 const isZones = bridge.windowLabel === "zones";
+const isFsVol = bridge.windowLabel === "fsvol";
 document.documentElement.classList.toggle("native", isTauri);
 document.documentElement.classList.toggle("settings-window", isSettings);
 document.documentElement.classList.toggle("zones-window", isZones);
+document.documentElement.classList.toggle("fsvol-window", isFsVol);
 
 // Feel like a desktop app, not a web page: no browser right-click menu (text fields keep
 // theirs for copy/paste), no stray drags of pictures or links.
@@ -60,10 +62,11 @@ installSmoothScroll();
 // drop-zone overlay or the browser preview, so it starts (and first opens) faster.
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const Zones = lazy(() => import("./Zones").then((m) => ({ default: m.Zones })));
+const FsVolume = lazy(() => import("./FsVolume").then((m) => ({ default: m.FsVolume })));
 const Preview = lazy(() => import("./Preview").then((m) => ({ default: m.Preview })));
 
 createRoot(document.getElementById("root")!).render(
   <Suspense fallback={null}>
-    {isZones ? <Zones /> : <SettingsProvider>{isSettings ? <SettingsPage /> : isTauri ? <App /> : <Preview />}</SettingsProvider>}
+    {isZones ? <Zones /> : <SettingsProvider>{isSettings ? <SettingsPage /> : isFsVol ? <FsVolume /> : isTauri ? <App /> : <Preview />}</SettingsProvider>}
   </Suspense>,
 );

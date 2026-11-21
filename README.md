@@ -41,6 +41,12 @@ as a pill, it keeps the art in view with a soft glow in the album's own colour, 
 
 <p align="center"><img src="docs/media/music-compact.webp" alt="The collapsed music pill with the cover flip and glow" width="640"></p>
 
+Play a movie or an episode in mpv, VLC or Stremio and the island looks it up: the real poster, shown
+whole instead of cropped into a square, the actual title instead of the release file name, and the
+director (or, for an episode, its season, number and name) instead of the player's name.
+
+<p align="center"><img src="docs/media/movies.webp" alt="A movie and an episode playing in mpv: full poster, real title, director or episode name" width="880"></p>
+
 Download something, record the screen or start a timer while music plays, and the second activity
 buds off into its own bubble, then melts back in when it's done. A second player does the same.
 

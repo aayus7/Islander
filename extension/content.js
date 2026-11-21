@@ -273,9 +273,13 @@
   }
 
   // Safety net: metadata changes (SPA navigation), shadow-DOM players, and drift.
+  // A paused player also checks in every 20 s: Firefox suspends an idle extension
+  // background after ~30 s, which drops the connection to the island (it then falls back
+  // to the browser's own, less detailed session: browser logo, low-res thumbnail).
   setInterval(() => {
     const playing = current && !current.paused;
-    report(playing && Date.now() - lastSent > 5000);
+    const since = Date.now() - lastSent;
+    report((playing && since > 5000) || (!!current && since > 20000));
   }, 1000);
 
   addEventListener("pagehide", () => {

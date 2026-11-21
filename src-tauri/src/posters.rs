@@ -171,7 +171,7 @@ fn data_url(bytes: &[u8]) -> String {
 //
 // Windows hands media apps' covers over small (Spotify: ~300 px), which looks soft when
 // the cover grows into the big card. This finds the same cover at full size:
-// - a movie/episode (IMDb id): IMDb's own poster at ART_PX wide (MetaHub's large one if not);
+// - a movie/episode (IMDb id): IMDb's own poster at POSTER_PX wide (MetaHub's large one if not);
 // - music: Apple's iTunes Search, then Deezer (both asked at once), 500–600 px. Only a
 //   result whose artist AND title agree with what's playing is used: a sharp wrong cover
 //   (a live version, a cover band) is worse than a soft right one.
@@ -182,8 +182,10 @@ fn data_url(bytes: &[u8]) -> String {
 
 static ART_CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
 
-/// Size of the large covers and posters (longest side for covers, width for posters).
+/// Size of the large music covers.
 const ART_PX: u32 = 800;
+/// Width of the large movie/series posters (kept high: they're shown big and tall).
+const POSTER_PX: u32 = 1000;
 
 #[tauri::command]
 pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, album: String, imdb: Option<String>) -> Option<String> {
@@ -224,7 +226,7 @@ pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, alb
             }
         }
         let bytes = match imdb.as_deref().filter(|i| i.starts_with("tt")) {
-            // IMDb's own poster at ART_PX wide; MetaHub's large poster if that fails.
+            // IMDb's own poster at POSTER_PX wide; MetaHub's large poster if that fails.
             Some(id) => imdb_poster(id).or_else(|| http_get(&format!("https://images.metahub.space/poster/large/{id}/img")).filter(|b| b.len() > 2048)),
             None => music_art(&artist, &title, &album),
         }?;
@@ -285,9 +287,9 @@ struct ImdbImage {
     url: String,
 }
 
-/// The title's poster from IMDb's image server, ART_PX wide. IMDb's search suggestions
+/// The title's poster from IMDb's image server, POSTER_PX wide. IMDb's search suggestions
 /// (free, no key; what imdb.com's own search box uses) give the original image, and its
-/// URL takes a size: "…_V1_.jpg" → "…_V1_UX800_.jpg".
+/// URL takes a size: "…_V1_.jpg" → "…_V1_UX1000_.jpg".
 fn imdb_poster(id: &str) -> Option<Vec<u8>> {
     let body = http_get(&format!("https://v3.sg.media-imdb.com/suggestion/t/{id}.json"))?;
     let hit = serde_json::from_slice::<ImdbSuggest>(&body).ok()?.d.into_iter().find(|h| h.id == id)?;
@@ -296,7 +298,7 @@ fn imdb_poster(id: &str) -> Option<Vec<u8>> {
         return None;
     }
     let sized = match url.rfind("._V1_") {
-        Some(i) => format!("{}._V1_UX{ART_PX}_.jpg", &url[..i]),
+        Some(i) => format!("{}._V1_UX{POSTER_PX}_.jpg", &url[..i]),
         None => url,
     };
     http_get(&sized).filter(|b| b.len() > 4096)

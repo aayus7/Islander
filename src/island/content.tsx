@@ -1225,7 +1225,7 @@ function LivingBg({ src: art }: { src: string | null }) {
   // Base: edge to edge, oversized so its edges never show as it drifts. On top: two soft-
   // edged copies (fading to transparent) wandering and turning, for the movement.
   const fill = useBlurred(art, "fill");
-  const glow = useBlurred(art, "glow");
+  const glow = useBlurred(art, "soft");
   return (
     <div className="living-bg" aria-hidden>
       <AnimatePresence initial={false}>

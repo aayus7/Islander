@@ -65,12 +65,14 @@ export function useArtAspect(src: string | null): number {
 // and moving or fading it then costs next to nothing.
 //   "fill": edge to edge (the living background);
 //   "glow": the art in the middle fading out to transparent around it (glows), shown
-//           ~24 % larger than the art it sits behind.
+//           ~24 % larger than the art it sits behind;
+//   "soft": a small blot in the middle with a wide fully transparent border, for layers
+//           stretched across a whole area (no edge can ever show).
 
 const blurred = new Map<string, string | null>();
 const blurWaiting = new Map<string, Array<() => void>>();
 
-function makeBlurred(src: string, kind: "fill" | "glow", done: () => void) {
+function makeBlurred(src: string, kind: "fill" | "glow" | "soft", done: () => void) {
   const key = `${kind}|${src}`;
   if (blurred.has(key)) return done();
   const q = blurWaiting.get(key);
@@ -89,8 +91,9 @@ function makeBlurred(src: string, kind: "fill" | "glow", done: () => void) {
       const c = document.createElement("canvas");
       c.width = c.height = n;
       const ctx = c.getContext("2d")!;
-      ctx.filter = kind === "fill" ? "blur(3px) saturate(1.6)" : "blur(4px) saturate(1.7)";
+      ctx.filter = kind === "fill" ? "blur(3px) saturate(1.6)" : kind === "soft" ? "blur(6px) saturate(1.6)" : "blur(4px) saturate(1.7)";
       if (kind === "fill") ctx.drawImage(img, -6, -6, n + 12, n + 12); // past the edges: no dark rim
+      else if (kind === "soft") ctx.drawImage(img, 18, 18, n - 36, n - 36); // ≥ 12 px of nothing around it
       else ctx.drawImage(img, 6, 6, n - 12, n - 12);
       finish(c.toDataURL(kind === "fill" ? "image/jpeg" : "image/png", 0.85));
     } catch {
@@ -102,7 +105,7 @@ function makeBlurred(src: string, kind: "fill" | "glow", done: () => void) {
 }
 
 /** A pre-blurred copy of `src` (null until it's ready, or if it can't be made). */
-export function useBlurred(src: string | null, kind: "fill" | "glow"): string | null {
+export function useBlurred(src: string | null, kind: "fill" | "glow" | "soft"): string | null {
   const [, bump] = useState(0);
   useEffect(() => {
     if (src) makeBlurred(src, kind, () => bump((n) => n + 1));

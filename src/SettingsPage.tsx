@@ -342,9 +342,8 @@ function DevicePreview() {
   const [pick, setPick] = useState(PREVIEW_DEVICES[0][0]);
   const play = () => {
     const level = 40 + Math.round(Math.random() * 55);
-    emit("bt://connected", { id: `preview-${Date.now()}`, name: pick, connected: true, kind: "audio", battery: null, audio: true });
-    // Real headsets report battery a moment after connecting; do the same so the ring fills in.
-    window.setTimeout(() => emit("bt://battery", [pick, level]), 900);
+    // Same as a real connection: the popup opens with the charge already in it.
+    emit("bt://connected", { id: `preview-${Date.now()}`, name: pick, connected: true, kind: "audio", battery: level, audio: true });
   };
   return (
     <Group title="Bluetooth devices" footer="Plays the connection animation in the island as if this device just connected. Nothing is paired or changed.">

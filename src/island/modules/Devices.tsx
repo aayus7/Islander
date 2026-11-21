@@ -316,9 +316,10 @@ export function useActivity(): Activity | null {
     const offs = [
       on<BtDevice>("bt://connected", (device) => show({ kind: "device", id: ++seq.current, device }, 4600)),
       on<{ kind: PowerKind; percent: number }>("power://alert", (p) => show({ kind: p.kind, id: ++seq.current, percent: p.percent }, p.kind === "low" ? 5000 : 3400)),
-      // The headset's battery usually arrives a second after it connects: fill the ring in.
+      // The popup normally opens with the charge already in it; a slow headset (or a level
+      // Windows had cached from last time) is filled in / corrected when the fresh read lands.
       on<[string, number]>("bt://battery", ([name, level]) =>
-        setAct((a) => (a?.kind === "device" && a.device.name === name && a.device.battery == null ? { ...a, device: { ...a.device, battery: level } } : a)),
+        setAct((a) => (a?.kind === "device" && a.device.name === name && a.device.battery !== level ? { ...a, device: { ...a.device, battery: level } } : a)),
       ),
     ];
     // Preview / testing hook: window.dispatchEvent(new CustomEvent("island:activity", { detail }))

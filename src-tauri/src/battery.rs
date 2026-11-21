@@ -32,6 +32,42 @@ pub fn scan_now() {
 #[cfg(not(windows))]
 pub fn scan_now() {}
 
+/// Has this device (by name) ever reported a battery level? Windows keeps the property on
+/// paired devices, so this also covers headsets seen in earlier sessions.
+pub fn known(name: &str) -> bool {
+    let n = name.to_lowercase();
+    levels().iter().any(|(l, _)| l.to_lowercase().contains(&n))
+}
+
+/// Reads one device's battery right now. Asks Windows only about device nodes whose name
+/// contains `name`, so it answers in a few milliseconds instead of walking every device
+/// on the PC, which is what lets the "Connected" popup open with the charge already in it.
+#[cfg(windows)]
+pub fn read(name: &str) -> Option<u8> {
+    let clean: String = name.chars().filter(|c| *c != '"').collect();
+    let mut found = imp::scan_aqs(&format!("System.ItemNameDisplay:~~\"{clean}\""));
+    if found.is_none() {
+        // The filtered query isn't supported everywhere: fall back to the full walk.
+        found = Some(imp::scan());
+    }
+    let map = found?;
+    let n = name.to_lowercase();
+    let level = map.iter().find(|(k, _)| k.to_lowercase().contains(&n)).map(|(_, v)| *v)?;
+    if let Ok(mut l) = LEVELS.lock() {
+        for (k, v) in map {
+            match l.iter_mut().find(|(x, _)| *x == k) {
+                Some(e) => e.1 = v,
+                None => l.push((k, v)),
+            }
+        }
+    }
+    Some(level)
+}
+#[cfg(not(windows))]
+pub fn read(_name: &str) -> Option<u8> {
+    None
+}
+
 #[cfg(windows)]
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || imp::run(app));
@@ -53,12 +89,17 @@ mod imp {
     const BATTERY: &str = "{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2";
 
     pub fn scan() -> HashMap<String, u8> {
+        scan_aqs("").unwrap_or_default()
+    }
+
+    /// Battery levels of the device nodes matching `aqs` ("" = all). None if Windows
+    /// rejected the query.
+    pub fn scan_aqs(aqs: &str) -> Option<HashMap<String, u8>> {
         let mut out = HashMap::new();
         let props: IIterable<HSTRING> = vec![HSTRING::from(BATTERY)].into();
-        let Ok(list) = DeviceInformation::FindAllAsyncWithKindAqsFilterAndAdditionalProperties(&HSTRING::new(), &props, DeviceInformationKind::Device).and_then(|op| op.get())
-        else {
-            return out;
-        };
+        let list = DeviceInformation::FindAllAsyncWithKindAqsFilterAndAdditionalProperties(&HSTRING::from(aqs), &props, DeviceInformationKind::Device)
+            .and_then(|op| op.get())
+            .ok()?;
         let key = HSTRING::from(BATTERY);
         for d in list {
             let Ok(map) = d.Properties() else { continue };
@@ -73,7 +114,7 @@ mod imp {
                 out.insert(name.to_string(), level);
             }
         }
-        out
+        Some(out)
     }
 
     pub fn run(app: AppHandle) {

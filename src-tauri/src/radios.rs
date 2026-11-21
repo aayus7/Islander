@@ -651,18 +651,43 @@ mod imp {
             emit("bt://state", &st);
         }
         for d in newly {
-            emit("bt://connected", &d);
-            // Headsets report their battery a moment after connecting: fetch it then.
-            let name = d.name.clone();
+            // Open the popup with the charge already in it: a headset reports its battery a
+            // moment after it connects, so poll that one device quickly (each read is a few
+            // ms) and hold the popup for at most ~1.5 s. Devices that have never reported a
+            // battery (mice, speakers) don't wait at all.
             std::thread::spawn(move || {
-                for ms in [1200u64, 3000, 6000] {
+                com();
+                let mut d = d;
+                let name = d.name.clone();
+                if d.audio || crate::battery::known(&name) {
+                    let start = std::time::Instant::now();
+                    loop {
+                        if let Some(l) = crate::battery::read(&name) {
+                            d.battery = Some(l);
+                            break;
+                        }
+                        if start.elapsed() >= Duration::from_millis(1500) {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                }
+                let shown = d.battery;
+                emit("bt://connected", &d);
+                if shown.is_some() {
+                    publish_bt();
+                }
+                // Windows can hold on to the level from last time for a moment: re-read a
+                // couple of times and correct the ring if it moved (or fill it in, if the
+                // headset was slower than the wait above).
+                let mut last = shown;
+                for ms in [1500u64, 4000] {
                     std::thread::sleep(Duration::from_millis(ms));
-                    crate::battery::scan_now();
-                    let lvl = crate::battery::levels().into_iter().find(|(n, _)| n.to_lowercase().contains(&name.to_lowercase())).map(|(_, l)| l);
-                    if let Some(l) = lvl {
-                        emit("bt://battery", &(name.clone(), l));
+                    let lvl = crate::battery::read(&name);
+                    if lvl.is_some() && lvl != last {
+                        emit("bt://battery", &(name.clone(), lvl.unwrap()));
                         publish_bt();
-                        break;
+                        last = lvl;
                     }
                 }
             });

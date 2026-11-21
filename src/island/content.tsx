@@ -1152,7 +1152,7 @@ function CardGlow({ src: art, radius }: { src: string | null; radius: number }) 
       const v = levels.map((l) => Math.pow(Math.max(0, Math.min(1, l.get())), 0.85));
       const avg = v.reduce((a, b) => a + b, 0) / v.length;
       // Stretch the usual range so quiet and loud moments look different.
-      energy.set(Math.max(0, Math.min(1, (avg - 0.12) / 0.6)));
+      energy.set(Math.max(0, Math.min(1, (avg - 0.08) / 0.45)));
     };
     // All six bands are set together on each audio update: recompute once, on the last.
     const off = levels[levels.length - 1].on("change", update);
@@ -1160,8 +1160,8 @@ function CardGlow({ src: art, radius }: { src: string | null; radius: number }) 
   }, [energy]);
   // A little softer than the bars, so the glow flows rather than flickers.
   const e = useSpring(energy, { stiffness: 900, damping: 55, mass: 0.5 });
-  const scale = useTransform(e, (v) => 1.02 + v * 0.12);
-  const opacity = useTransform(e, (v) => 0.55 + v * 0.4);
+  const scale = useTransform(e, (v) => 1.0 + v * 0.24);
+  const opacity = useTransform(e, (v) => 0.45 + v * 0.55);
   if (!src) return null;
   return (
     <motion.span

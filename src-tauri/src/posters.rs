@@ -183,7 +183,7 @@ fn data_url(bytes: &[u8]) -> String {
 static ART_CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
 
 /// Size of the large music covers.
-const ART_PX: u32 = 800;
+const ART_PX: u32 = 600;
 /// Width of the large movie/series posters (kept high: they're shown big and tall).
 const POSTER_PX: u32 = 1000;
 
@@ -414,7 +414,7 @@ fn music_art(artist: &str, title: &str, album: &str) -> Option<Vec<u8>> {
             })
     });
     let term = format!("{} {}", artist, title);
-    // ART_PX (800): sharp at the card's size, and quick. (Covers are remembered on disk
+    // ART_PX (600): sharp at the card's size, and quick. (Covers are remembered on disk
     // and per album, so most track changes don't wait for this at all.)
     let itunes = http_get(&format!("https://itunes.apple.com/search?media=music&entity=song&limit=15&term={}", encode(&term)))
         .and_then(|b| serde_json::from_slice::<ItunesResp>(&b).ok())

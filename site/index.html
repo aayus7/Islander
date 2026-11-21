@@ -210,6 +210,10 @@ footer { padding: 48px 0 60px; border-top: 1px solid var(--line); color: var(--f
 .foot nav { display: flex; gap: 22px; flex-wrap: wrap; }
 .foot a { color: var(--mute); text-decoration: none; }
 .foot a:hover { color: var(--ink); }
+.credit { margin: 28px 0 0; color: var(--mute); font-size: 14px; }
+.credit b { color: var(--ink); font-weight: 600; }
+.credit a { color: var(--ink); text-decoration: underline; text-decoration-color: rgba(255, 94, 91, 0.6); text-underline-offset: 3px; }
+.credit a:hover { text-decoration-color: #ff5e5b; }
 .legal { margin-top: 20px; color: var(--faint); font-size: 13px; max-width: 760px; }
 
 @media (max-width: 900px) {
@@ -428,6 +432,7 @@ html.revealed .hero-in > :nth-child(5) { animation-delay: 0.24s; }
         <a href="https://ko-fi.com/aayus7">Ko-fi</a>
       </nav>
     </div>
+    <p class="credit">Designed and built by <b>aayus</b>. If Islander makes your desktop better, <a href="https://ko-fi.com/aayus7">buy me a coffee on Ko-fi</a>.</p>
     <p class="legal">Islander is free software under the GPL-3.0. It is an independent project, not affiliated with or endorsed by Apple. Dynamic Island, iPhone and AirPods are trademarks of Apple Inc.; Windows is a trademark of Microsoft.</p>
   </div>
 </footer>

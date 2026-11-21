@@ -274,6 +274,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
   useEffect(() => bridge.onHover(setHoverDelayed), [setHoverDelayed]);
 
   const [mediaExtra, setMediaExtra] = useState(0);
+  const [mediaW, setMediaW] = useState<number | null>(null); // cover card around a narrow poster
   const [controlsExtra, setControlsExtra] = useState(0);
 
   /* ---- swipe up (drag the island upwards) to dismiss, like iOS ---- */
@@ -656,7 +657,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
         : { w: AI_W, h: aiH, r: aiView === "search" ? aiH / 2 : 40 }
       : mode === "expanded"
         ? tab === "media"
-          ? { ...SIZES.media, h: SIZES.media.h + mediaExtra + (mediaVol ? MEDIA_VOL_H : 0) }
+          ? { ...SIZES.media, w: mediaW ?? SIZES.media.w, h: SIZES.media.h + mediaExtra + (mediaVol ? MEDIA_VOL_H : 0) }
           : tab === "controls"
             ? { ...SIZES.controls, h: SIZES.controls.h + controlsExtra }
           : tab === "shelf"
@@ -1229,6 +1230,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                 onCommand={(a) => session && onCommand(session.id, a)}
                 onSelect={onSelect}
                 onExtraHeight={setMediaExtra}
+                onWidth={setMediaW}
               />
             )}
             {mode === "expanded" && tab === "media" && (

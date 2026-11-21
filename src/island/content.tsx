@@ -52,7 +52,7 @@ export function MediaMinimal({ session }: { session: MediaSession }) {
 /* ---------- Expanded media ---------- */
 
 export function MediaExpanded({
-  session, sessions, width, height, onCommand, onSelect, onExtraHeight,
+  session, sessions, width, height, onCommand, onSelect, onExtraHeight, onWidth,
 }: {
   session: MediaSession | null;
   sessions: MediaSession[];
@@ -62,6 +62,8 @@ export function MediaExpanded({
   onSelect(id: string): void;
   /** Extra height the panel needs (e.g. while the output list is open). */
   onExtraHeight?(h: number): void;
+  /** A width other than the normal player's (the cover card around a narrow poster); null = normal. */
+  onWidth?(w: number | null): void;
 }) {
   const [routesOpen, setRoutesOpen] = useState(false);
   const { devices, setDevices } = useOutputs(routesOpen);
@@ -92,7 +94,7 @@ export function MediaExpanded({
   const hi = useHiRes(session);
   const hiSize = useArtSize(hi.url);
   const loSize = useArtSize(session?.artwork ?? null);
-  const card = coverCard(hi.url ? hiSize : loSize, !!hi.url || hi.pending, loSize, height);
+  const card = coverCard(hi.url ? hiSize : loSize, !!hi.url || hi.pending, loSize, width, height);
   useEffect(() => {
     if (!big) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && back();
@@ -106,6 +108,10 @@ export function MediaExpanded({
   useEffect(() => {
     onExtraHeight?.(big ? card.extra : listH + artExtra);
   }, [big, card.extra, listH, artExtra, onExtraHeight]);
+  useEffect(() => {
+    onWidth?.(big && card.boxW !== width ? card.boxW : null);
+  }, [big, card.boxW, width, onWidth]);
+  useEffect(() => () => onWidth?.(null), [onWidth]);
   useEffect(() => () => onExtraHeight?.(0), [onExtraHeight]);
 
   // Optimistic UI: show the result of a seek / play-pause instantly, then hand back to
@@ -156,7 +162,7 @@ export function MediaExpanded({
     return (
       <div
         className="cover-card"
-        style={{ width, height: height + card.extra }}
+        style={{ width: card.boxW, height: height + card.extra, paddingTop: CARD_PAD }}
         title="Back to the player"
         onClick={(e) => {
           e.stopPropagation();
@@ -166,7 +172,7 @@ export function MediaExpanded({
         <motion.div
           layoutId="mx-cover"
           className="cover-big"
-          style={{ width: card.w, height: card.h, borderRadius: 20 }}
+          style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}
           transition={COVER_SPRING}
         >
           <ArtGlow src={session.artwork} playing={cur.playing} />
@@ -189,7 +195,7 @@ export function MediaExpanded({
         </motion.div>
         <motion.div
           className="cover-text"
-          style={{ width: Math.max(card.w, 240) }}
+          style={{ width: card.w }}
           initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ delay: 0.1, duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
@@ -968,22 +974,30 @@ function Skip10Icon({ size = 30, dir }: { size?: number; dir: 1 | -1 }) {
 /** The grow/shrink between the small cover and the card: quick, with a soft landing. */
 const COVER_SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.9 };
 
+/** Gap around the cover in the card: the same on the top and both sides. */
+const CARD_PAD = 22;
+/** The cover's corners follow the island's (46) at that distance. */
+const CARD_RADIUS = 24;
+
 /**
- * Size of the cover card for an image of `size` (natural pixels). Square covers get 300 px,
- * wide ones (videos) up to the player's width, tall posters up to 340 px high. With no
- * large copy coming, the card never shows the art more than ~25 % past its real
- * resolution, so a small cover doesn't turn to mush (never smaller than 170 px).
- * `extra` is how much taller than the player the island has to grow.
+ * Size of the cover card for an image of `size` (natural pixels). Square and wide covers
+ * fill the player's width less the gap on each side; tall posters are up to 340 px high and
+ * the island narrows to wrap them with the same gap. With no large copy coming, the card
+ * never shows the art more than ~25 % past its real resolution, so a small cover doesn't
+ * turn to mush (never smaller than 170 px). `boxW` is the island's width for the card and
+ * `extra` how much taller than the player it has to grow.
  */
-function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { w: number; h: number } | null, base: number) {
+function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { w: number; h: number } | null, playerW: number, base: number) {
   const r = size ? size.h / size.w : 1;
-  let w = r < 0.9 ? 328 : r > 1.15 ? Math.round(340 / r) : 300;
+  const full = playerW - CARD_PAD * 2;
+  let w = r > 1.15 ? Math.min(full, Math.round(340 / r)) : full;
   if (!sharp && lo) {
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     w = Math.min(w, Math.round((lo.w / dpr) * 1.25));
   }
   w = Math.max(170, w);
   const h = Math.round(w * r);
-  const total = 22 + h + 14 + 44 + 22; // top, cover, gap, title + artist, bottom
-  return { w, h, extra: Math.max(0, total - base) };
+  const boxW = w + CARD_PAD * 2;
+  const total = CARD_PAD + h + 14 + 44 + 22; // top gap, cover, gap, title + artist, bottom
+  return { w, h, boxW, extra: Math.max(0, total - base) };
 }

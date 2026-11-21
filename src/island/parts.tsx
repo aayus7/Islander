@@ -64,8 +64,8 @@ export function useArtAspect(src: string | null): number {
 // blurred picture has no fine detail left, so stretching a 64 px one up looks the same,
 // and moving or fading it then costs next to nothing.
 //   "fill": edge to edge (the living background);
-//   "glow": the art in the middle fading out to transparent around it (glows), shown
-//           ~24 % larger than the art it sits behind;
+//   "glow": the art in the middle fading out to fully transparent well before the edge
+//           (glows); the art fills ~62 % of it, so it's drawn ~60 % larger than the art;
 //   "soft": a small blot in the middle with a wide fully transparent border, for layers
 //           stretched across a whole area (no edge can ever show).
 
@@ -94,7 +94,7 @@ function makeBlurred(src: string, kind: "fill" | "glow" | "soft", done: () => vo
       ctx.filter = kind === "fill" ? "blur(3px) saturate(1.6)" : kind === "soft" ? "blur(6px) saturate(1.6)" : "blur(4px) saturate(1.7)";
       if (kind === "fill") ctx.drawImage(img, -6, -6, n + 12, n + 12); // past the edges: no dark rim
       else if (kind === "soft") ctx.drawImage(img, 18, 18, n - 36, n - 36); // ≥ 12 px of nothing around it
-      else ctx.drawImage(img, 6, 6, n - 12, n - 12);
+      else ctx.drawImage(img, 12, 12, n - 24, n - 24); // ~8 px of nothing around the blur
       finish(c.toDataURL(kind === "fill" ? "image/jpeg" : "image/png", 0.85));
     } catch {
       finish(null);

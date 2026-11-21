@@ -324,6 +324,9 @@ button { font: inherit; color: inherit; }
 .sp-about-name { font-size: 20px; font-weight: 700; margin-top: 12px; }
 .sp-about-ver { font-size: 12px; color: var(--label2); margin-top: 3px; }
 .sp-about-tag { font-size: 13px; color: rgba(255,255,255,.8); margin-top: 8px; }
+.sp-about-by { font-size: 12px; color: var(--label2); margin-top: 4px; letter-spacing: 0.02em; }
+.sp-btn.kofi { background: #ff5e5b; color: #fff; }
+.sp-btn.kofi:hover { background: #ff7472; }
 
 /* ---------- AI panel ("Search or Ask") ---------- */
 .stage.ai-open { pointer-events: auto; } /* clicks outside the panel close it */

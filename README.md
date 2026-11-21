@@ -16,6 +16,19 @@
 </p>
 
 <p align="center">
+  <b>Works with</b><br>
+  <img src="https://img.shields.io/badge/Spotify-1c1c1e?style=flat-square&logo=spotify&logoColor=1ed760" alt="Spotify">
+  <img src="https://img.shields.io/badge/YouTube-1c1c1e?style=flat-square&logo=youtube&logoColor=ff0033" alt="YouTube">
+  <img src="https://img.shields.io/badge/mpv-1c1c1e?style=flat-square&logo=mpv&logoColor=white" alt="mpv">
+  <img src="https://img.shields.io/badge/VLC-partial-1c1c1e?style=flat-square&logo=vlcmediaplayer&logoColor=ff8800" alt="VLC (partial)">
+  <img src="https://img.shields.io/badge/Mister%20Download%20Manager-1c1c1e?style=flat-square" alt="Mister Download Manager">
+  <img src="https://img.shields.io/badge/IDM-1c1c1e?style=flat-square" alt="Internet Download Manager">
+  <img src="https://img.shields.io/badge/LocalSend-1c1c1e?style=flat-square" alt="LocalSend">
+  <img src="https://img.shields.io/badge/AirPods%20%26%20Beats-1c1c1e?style=flat-square&logo=apple&logoColor=white" alt="AirPods and Beats">
+  <img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Firefox-1c1c1e?style=flat-square&logo=googlechrome&logoColor=white" alt="Chrome, Edge and Firefox (browser extension)">
+</p>
+
+<p align="center">
   <img src="docs/media/music.webp" alt="Islander playing Spotify: hover to expand, scrub, switch sources" width="880">
 </p>
 
@@ -41,11 +54,16 @@ as a pill, it keeps the art in view with a soft glow in the album's own colour, 
 
 <p align="center"><img src="docs/media/music-compact.webp" alt="The collapsed music pill with the cover flip and glow" width="640"></p>
 
+Click the cover and it grows into a full cover card: the art in high resolution (looked up for
+Spotify and other players, which only hand Windows a small copy), the title, a scrubber and the
+controls gliding in with it. The cover leans toward your cursor like an Apple TV poster, a glow behind
+it pulses with the music, and the island fills with the cover's own colours. Click it again to go back.
+
 Play a movie or an episode in mpv (VLC partly) and the island looks it up: the real poster, shown
 whole instead of cropped into a square, the actual title instead of the release file name, and the
 director (or, for an episode, its season, number and name) instead of the player's name.
 VLC support is partial: VLC doesn't report to Windows' media controls, so Islander reads its window
-title instead. You get the title and poster plus play/pause and next/previous, but no timeline or ±10 s.
+title instead. You get the title, the poster and play/pause and next/previous, but no scrubber or ±10 s.
 
 <p align="center"><img src="docs/media/movies.webp" alt="A movie and an episode playing in mpv: full poster, real title, director or episode name" width="880"></p>
 
@@ -158,12 +176,13 @@ and run it. Islander updates itself from then on. Right-click the island for Set
 - **Gets out of the way**: hides while a fullscreen game, F11 browser or fullscreen video is in front,
   with optional auto-hide until you touch the screen edge.
 - **Multi-monitor & DPI**: primary display, a specific display, or follow the mouse.
+- **Tray icon**: click it for Settings; its menu shows or hides the island, or quits.
 
 ### Tabs (scroll to switch; each can be turned off and reordered)
 | Tab | What it does |
 |---|---|
 | **Search or Ask** | Siri-style AI bar. Works out of the box with **no API key** through Islander's free service, with live web, news and sports-score lookups. **Ask by voice**: tap the mic, speak, and it asks when you pause. Short answers, sources, follow-ups and a remembered conversation; shrinks to a glowing circle while thinking. After an answer, just type to ask again, or press Backspace for a fresh question. Maths and unit conversions (`12 km to mi`) are answered instantly on your PC. Optional real **liquid glass**. |
-| **Now Playing** | Media from every app (Spotify, browsers, mpv…) with artwork (movie and series posters for mpv, and partly VLC), a 5-bar waveform driven by the real audio (iOS-style, quiet when the music is quiet), 3D cover flip, a draggable scrubber, rolling-digit timestamps, a **LIVE** bar for streams, source switching, an output-device picker and click-to-open the app. |
+| **Now Playing** | Media from every app (Spotify, browsers, mpv…; VLC partly, without a scrubber) with artwork (movie and series posters for mpv and VLC, video thumbnails at their real wide shape), a 5-bar waveform driven by the real audio (iOS-style, quiet when the music is quiet), 3D cover flip, a draggable scrubber, rolling-digit timestamps, a **LIVE** bar for streams, smooth source switching, an output-device picker and click-to-open the app. **Cover card**: click the cover for the art in high resolution with the title, scrubber and controls; it tilts toward the cursor, glows with the music, fills the island with the cover's colours, and remembers covers so they show instantly next time. |
 | **Downloads** | Appears while something downloads: browser downloads (via the extension), **Mister Download Manager** and **Internet Download Manager**. Hover for every download with progress and speed, cancel one, or click a finished one to open its folder. |
 | **Today** | Month calendar, a weather glance (Open-Meteo, no key; located by Windows' location service, or set your city) with a sun or moon that playfully follows your cursor, and your next reminders. |
 | **Timer & Focus** | iOS Clock-style timer, stopwatch (with laps) and Focus (Pomodoro). Keeps running as a live pill while collapsed and chimes when done. |
@@ -300,8 +319,9 @@ Everything runs locally except:
   free tier may use questions to improve Google's products, so avoid private information.
 - **Nearby sharing**, only on your local network: Islander announces itself to LocalSend devices on
   the same Wi-Fi and listens on port 53317. Nothing is received without your OK.
-- **Weather** (Open-Meteo), **posters** (Cinemeta/MetaHub), **update checks** (GitHub) and website icons
-  for pinned URLs.
+- **Weather** (Open-Meteo), **posters** (Cinemeta, MetaHub, IMDb), **high-resolution covers** (Apple's
+  iTunes Search and Deezer: only the artist, title and album of what's playing are sent), **update
+  checks** (GitHub) and website icons for pinned URLs.
 
 Clipboard history, notes and shelf lists stay on your PC (`%APPDATA%\dev.island.desktop`). The screen
 capture for liquid glass is used live and never saved. The microphone is only on while you're asking.
@@ -330,7 +350,8 @@ please give them a different name and icon so nobody mistakes them for the offic
 - **AirPods & Beats animations**: [AirPodsDesktop](https://github.com/SpriteOvO/AirPodsDesktop) by
   SpriteOvO, GPL-3.0 (licence in `public/devices/`).
 - **Inter** typeface: The Inter Project Authors, SIL Open Font License 1.1 (licence in `src/assets/fonts/`).
-- **Weather**: Open-Meteo, CC BY 4.0. **Posters**: Cinemeta and MetaHub.
+- **Weather**: Open-Meteo, CC BY 4.0. **Posters**: Cinemeta, MetaHub and IMDb. **Covers**: Apple's
+  iTunes Search API and Deezer.
 - **Speech-to-text**: OpenAI Whisper on Cloudflare Workers AI.
 - **Nearby sharing** works with [LocalSend](https://github.com/localsend/localsend) (Apache-2.0) by
   implementing its open [protocol](https://github.com/localsend/protocol); no LocalSend code is bundled.

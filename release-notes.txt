@@ -1,24 +1,20 @@
-Islander 0.9.4
+Islander 0.9.5
 
-Movies and shows
-- Play a movie or an episode in mpv, VLC or Stremio and the island shows its real poster, whole instead of cropped into a square; the player grows to fit it.
-- The title is the film's actual name instead of the release file name, and the line under it shows the director instead of "mpv". Episodes show their season, number and name (S1 E4 · Please, Carol).
+The cover card
+- Click the cover in the music player and it grows into a big cover card: the art in high resolution, the title, a scrubber and play/pause/next/previous, all gliding in from the player. Click it (or press Esc) to go back; everything glides back into place.
+- Sharp covers: Spotify and most players only give Windows a small copy, so Islander looks up the same cover at full size (Apple's iTunes and Deezer, used only when the artist and title match). Covers are remembered, so the next song from the same album, and anything you've played before, shows instantly, even after a restart.
+- Movie and series posters in full resolution, from IMDb.
+- The cover leans toward your cursor like an Apple TV poster, with a moving shine and a shadow that shifts with it. It eases back when you pause.
+- A glow behind the cover pulses with the music, and the whole island fills with the cover's own colours, changing smoothly with each song.
+- On a track change the big cover turns like the small one. Works on every edge of the screen.
 
-Smoother and lighter
-- The island responds faster: it opens sooner on hover, closes sooner when you leave, and its content settles without waiting.
-- Lighter on your PC: while the island is tucked away it stops drawing, the music waveform stops analysing, and it checks the cursor less often when you're nowhere near it. Nothing it shows is any less live.
-- Search or Ask is ready the very first time you open it (no plain first frame).
-- On the left and right edges, the first hover right after moving the island works straight away.
-
-Volume
-- In fullscreen (games, videos), the volume keys show a small volume pill over the app without the island ever appearing.
-- Windows' own volume pop-up is now kept away in more cases: with an admin app in front, after a hardware knob or headset button, or with vendor audio software.
-
-Bluetooth devices
-- The "Connected" pop-up opens with the battery already showing, instead of the name first and the charge a second later.
-- AirPods Pro (1st gen): the animation's white background is gone.
-- AirPods Max and Beats Fit Pro (and the other AirPods): no more purple edge around the animation.
-- AirPods Max is no longer stretched sideways and sits snugly at the left of the pop-up.
+Videos and movies
+- YouTube and other videos show their thumbnail at its real wide shape, in the player and in the cover card, instead of a square crop.
+- VLC: partial support. VLC doesn't report to Windows' media controls, so Islander reads its window: you get the title, the movie poster and play/pause and next/previous, but no scrubber.
+- Browser extension 1.6: sends sharp, uncropped video thumbnails, and stays connected while a video is paused (Firefox used to drop it after a while, falling back to the browser logo and a blurry thumbnail). Update the extension to get these.
 
 Also
-- Settings › About now says who made Islander, with a Ko-fi link if you'd like to support it.
+- Islander has a tray icon: click it for Settings; its menu shows or hides the island, or quits.
+- Switching between sources in the player is animated: the cover resizes and the title crossfades.
+- Lighter: the new glows and colour background are drawn from tiny pre-blurred images, so the cover card costs about as much as the plain player.
+- Stremio was listed as supported but never worked; it's no longer mentioned.

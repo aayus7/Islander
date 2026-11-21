@@ -31,7 +31,7 @@ way for fullscreen games and video.
 
 ## Now Playing
 
-Media from every app (Spotify, YouTube in your browser, mpv, Stremio and more) with real album art,
+Media from every app (Spotify, YouTube in your browser, mpv and more) with real album art,
 a waveform that follows the actual audio, a draggable scrubber and one-tap source switching.
 
 <p align="center"><img src="docs/media/music-skip.webp" alt="Skipping tracks: the cover turns like on iPhone" width="880"></p>
@@ -41,9 +41,11 @@ as a pill, it keeps the art in view with a soft glow in the album's own colour, 
 
 <p align="center"><img src="docs/media/music-compact.webp" alt="The collapsed music pill with the cover flip and glow" width="640"></p>
 
-Play a movie or an episode in mpv, VLC or Stremio and the island looks it up: the real poster, shown
+Play a movie or an episode in mpv (VLC partly) and the island looks it up: the real poster, shown
 whole instead of cropped into a square, the actual title instead of the release file name, and the
 director (or, for an episode, its season, number and name) instead of the player's name.
+VLC support is partial: VLC doesn't report to Windows' media controls, so Islander reads its window
+title instead. You get the title and poster plus play/pause and next/previous, but no timeline or ±10 s.
 
 <p align="center"><img src="docs/media/movies.webp" alt="A movie and an episode playing in mpv: full poster, real title, director or episode name" width="880"></p>
 
@@ -161,7 +163,7 @@ and run it. Islander updates itself from then on. Right-click the island for Set
 | Tab | What it does |
 |---|---|
 | **Search or Ask** | Siri-style AI bar. Works out of the box with **no API key** through Islander's free service, with live web, news and sports-score lookups. **Ask by voice**: tap the mic, speak, and it asks when you pause. Short answers, sources, follow-ups and a remembered conversation; shrinks to a glowing circle while thinking. After an answer, just type to ask again, or press Backspace for a fresh question. Maths and unit conversions (`12 km to mi`) are answered instantly on your PC. Optional real **liquid glass**. |
-| **Now Playing** | Media from every app (Spotify, browsers, mpv, Stremio…) with artwork (movie and series posters for mpv/Stremio), a 5-bar waveform driven by the real audio (iOS-style, quiet when the music is quiet), 3D cover flip, a draggable scrubber, rolling-digit timestamps, a **LIVE** bar for streams, source switching, an output-device picker and click-to-open the app. |
+| **Now Playing** | Media from every app (Spotify, browsers, mpv…) with artwork (movie and series posters for mpv, and partly VLC), a 5-bar waveform driven by the real audio (iOS-style, quiet when the music is quiet), 3D cover flip, a draggable scrubber, rolling-digit timestamps, a **LIVE** bar for streams, source switching, an output-device picker and click-to-open the app. |
 | **Downloads** | Appears while something downloads: browser downloads (via the extension), **Mister Download Manager** and **Internet Download Manager**. Hover for every download with progress and speed, cancel one, or click a finished one to open its folder. |
 | **Today** | Month calendar, a weather glance (Open-Meteo, no key; located by Windows' location service, or set your city) with a sun or moon that playfully follows your cursor, and your next reminders. |
 | **Timer & Focus** | iOS Clock-style timer, stopwatch (with laps) and Focus (Pomodoro). Keeps running as a live pill while collapsed and chimes when done. |

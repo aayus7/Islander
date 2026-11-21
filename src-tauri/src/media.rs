@@ -405,7 +405,7 @@ mod imp {
         Ok(MediaState { sessions, current_id })
     }
 
-    /* ---- players that don't tell Windows what they're playing (VLC, Stremio) ----
+    /* ---- players that don't tell Windows what they're playing (VLC) ----
      * Seen through their window title ("Interstellar.2014.1080p.mkv - VLC media player"),
      * playing while the app makes sound. No timeline; play/pause and next/previous go to
      * the window as media-key commands (WM_APPCOMMAND), which VLC acts on. The title is
@@ -414,8 +414,6 @@ mod imp {
     /// (exe stem, app name shown, title suffix/prefix to strip, bare title = nothing playing)
     const TITLE_PLAYERS: &[(&str, &str, &str, &str)] = &[
         ("vlc", "VLC", " - VLC media player", "VLC media player"),
-        ("stremio", "Stremio", " - Stremio", "Stremio"),
-        ("stremio-shell-ng", "Stremio", " - Stremio", "Stremio"),
     ];
 
     /// Visible top-level windows of the title players: (stem, hwnd, title).

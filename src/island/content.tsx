@@ -1142,7 +1142,7 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
   }, [energy]);
   const e = useSpring(energy, { stiffness: 180, damping: 24, mass: 0.7 });
   const scale = useTransform(e, (v) => 1.02 + v * 0.12);
-  const opacity = useTransform(e, (v) => 0.32 + v * 0.68);
+  const opacity = useTransform(e, (v) => 0.32 + v * 0.53);
   if (!src) return null;
   return (
     <motion.span

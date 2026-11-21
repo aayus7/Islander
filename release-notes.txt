@@ -1,24 +1,24 @@
-Islander 0.9.3
+Islander 0.9.4
 
-Smoother
-- A second live activity (a timer next to your music, a download, a second player) now grows out from behind the island into its own bubble and melts back in, with no seam. Its number and ring sharpen into view once it's free.
-- In the right-hand corner of the screen the bubble buds off to the left, toward the screen.
-- Recording the screen while music plays keeps your music in the island; the recording shows as a red bubble beside it (click it for Pause / Stop).
-- Picking up the island pops it up; letting go glides it into place in one motion, with no flash. It no longer springs open under the cursor right after you drop it.
+Movies and shows
+- Play a movie or an episode in mpv, VLC or Stremio and the island shows its real poster, whole instead of cropped into a square; the player grows to fit it.
+- The title is the film's actual name instead of the release file name, and the line under it shows the director instead of "mpv". Episodes show their season, number and name (S1 E4 · Please, Carol).
 
-On every edge
-- On the left and right edges the island now has the same glowing, turning album cover as on the top, and shows a timer, download or second player as a bubble underneath.
+Smoother and lighter
+- The island responds faster: it opens sooner on hover, closes sooner when you leave, and its content settles without waiting.
+- Lighter on your PC: while the island is tucked away it stops drawing, the music waveform stops analysing, and it checks the cursor less often when you're nowhere near it. Nothing it shows is any less live.
+- Search or Ask is ready the very first time you open it (no plain first frame).
+- On the left and right edges, the first hover right after moving the island works straight away.
 
-New
-- With the music player open, the volume keys add a volume row under it instead of switching away.
-- Search or Ask: after an answer, press Backspace (or just start typing) for a fresh question, without clicking first.
-- A new chat message (WhatsApp, Discord, Telegram…) replaces the banner on screen right away.
+Volume
+- In fullscreen (games, videos), the volume keys show a small volume pill over the app without the island ever appearing.
+- Windows' own volume pop-up is now kept away in more cases: with an admin app in front, after a hardware knob or headset button, or with vendor audio software.
 
-Fixes
-- With music playing and a download running, hovering the island opens the music player again (it jumped to Downloads). Click the download bubble to see your downloads.
-- Mister Download Manager: downloads no longer drop out of the island when MDM's window is minimized or it's slow to answer, and Islander reconnects if MDM switches its connection off.
-- A timer or focus alert that finishes while Search or Ask is answering (or a panel is open) now always shows. Banners only count down while they're on screen.
-- Bluetooth no longer gets stuck on "Unavailable" when Windows is slow to answer; the switch stays usable.
-- Weather finds your town with Windows' location service, so it's no longer placed in your internet provider's city.
-- Nearby sharing: the progress ring around a phone is no longer cut off.
-- Timer presets no longer show a scrollbar on some setups.
+Bluetooth devices
+- The "Connected" pop-up opens with the battery already showing, instead of the name first and the charge a second later.
+- AirPods Pro (1st gen): the animation's white background is gone.
+- AirPods Max and Beats Fit Pro (and the other AirPods): no more purple edge around the animation.
+- AirPods Max is no longer stretched sideways and sits snugly at the left of the pop-up.
+
+Also
+- Settings › About now says who made Islander, with a Ko-fi link if you'd like to support it.

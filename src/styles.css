@@ -159,10 +159,10 @@ button { font: inherit; color: inherit; }
 .src img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .src .letter { position: relative; }
 .art-glow-wrap { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
-/* Pre-blurred (useBlurred "glow"): no live filter; drawn larger so its soft edge spreads out. */
 .art-glow {
-  position: absolute; inset: -38%;
-  background-size: 100% 100%; background-position: center;
+  position: absolute; inset: -2px; border-radius: 18px;
+  background-size: cover; background-position: center;
+  filter: blur(14px) saturate(1.7);
   transform: scale(1.12);
   pointer-events: none;
 }

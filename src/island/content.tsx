@@ -908,8 +908,7 @@ function FlipArt({ src = null, trackKey, dir, size = 64, height, radius = 14, ch
  * Very soft ambient glow behind the artwork, in the artwork's own colours.
  * Breathes slowly while playing, fades almost away when paused, cross-fades on track change.
  */
-function ArtGlow({ src: art, playing }: { src: string | null; playing: boolean }) {
-  const src = useBlurred(art, "glow");
+function ArtGlow({ src, playing }: { src: string | null; playing: boolean }) {
   return (
     <AnimatePresence initial={false}>
       {src && (

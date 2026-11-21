@@ -679,10 +679,12 @@ function About() {
           <button className="sp-btn" onClick={() => send("launch", { target: "https://github.com/aayus7/Islander" })}>View on GitHub</button>
         </Row>
       </Group>
-      <Group title="Credits" footer="Islander is free and made by one person. If it makes your desktop better, a coffee on Ko-fi helps keep it going.">
-        <Row label="Designed and built by aayus" hint="Every pixel, animation and line of code">
+      <Group title="Made by" footer="Islander is free and made by one person. If it makes your desktop better, a coffee on Ko-fi helps keep it going.">
+        <Row label="aayus" hint="Designed and built Islander: every pixel, animation and line of code">
           <button className="sp-btn kofi" onClick={() => send("launch", { target: "https://ko-fi.com/aayus7" })}>Support on Ko-fi</button>
         </Row>
+      </Group>
+      <Group title="Credits">
         <Row label="AirPods & Beats animations" hint="From AirPodsDesktop by SpriteOvO, licensed GPL-3.0 (github.com/SpriteOvO/AirPodsDesktop)">
           <span />
         </Row>

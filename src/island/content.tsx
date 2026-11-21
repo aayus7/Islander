@@ -1,4 +1,4 @@
-import { AnimatePresence, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from "motion/react";
 import { levels, startAudio } from "../lib/audio";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { bridge, type MediaAction, type MediaSession, type OutputDevice } from "../bridge";
@@ -304,28 +304,31 @@ export function MediaExpanded({
           className="cover-big"
           style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}
         >
-          <CardGlow src={(wideArt ? null : hi.url) ?? cardLo} radius={CARD_RADIUS} />
-          {/* Turns to the next cover on a track change, like the small one. */}
-          <FlipArt trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={card.w} height={card.h}>
-            <div className="cover-face" style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}>
-              {cardLo && <img className="cover-lo" src={cardLo} alt="" draggable={false} />}
-              <AnimatePresence>
-                {hi.url && !wideArt && (
-                  <motion.img
-                    key={hi.url}
-                    className="cover-hi"
-                    src={hi.url}
-                    alt=""
-                    draggable={false}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
-                  />
-                )}
-              </AnimatePresence>
-              {!session.artwork && !hi.url && <NoteIcon size={64} />}
-            </div>
-          </FlipArt>
+          {/* Apple TV-style: leans toward the cursor, catches the light, springs back. */}
+          <MagnetCover w={card.w} h={card.h} radius={CARD_RADIUS}>
+            <CardGlow src={(wideArt ? null : hi.url) ?? cardLo} radius={CARD_RADIUS} />
+            {/* Turns to the next cover on a track change, like the small one. */}
+            <FlipArt trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={card.w} height={card.h}>
+              <div className="cover-face" style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}>
+                {cardLo && <img className="cover-lo" src={cardLo} alt="" draggable={false} />}
+                <AnimatePresence>
+                  {hi.url && !wideArt && (
+                    <motion.img
+                      key={hi.url}
+                      className="cover-hi"
+                      src={hi.url}
+                      alt=""
+                      draggable={false}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                    />
+                  )}
+                </AnimatePresence>
+                {!session.artwork && !hi.url && <NoteIcon size={64} />}
+              </div>
+            </FlipArt>
+          </MagnetCover>
         </motion.div>
         <motion.div
           className="cover-text"
@@ -1143,5 +1146,51 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
       className="card-glow"
       style={{ backgroundImage: `url("${src}")`, borderRadius: radius + 6, scale, opacity }}
     />
+  );
+}
+
+/**
+ * Apple TV-style "magnetic" cover: with the cursor over it, it tilts toward the cursor (a
+ * few degrees in 3D), shifts a few pixels its way and a soft shine follows across it; when
+ * the cursor leaves it springs back flat with a little wobble; pressing pushes it in.
+ */
+function MagnetCover({ w, h, radius, children }: { w: number; h: number; radius: number; children: React.ReactNode }) {
+  const px = useMotionValue(0); // -0.5 … 0.5 across the cover
+  const py = useMotionValue(0);
+  const over = useMotionValue(0);
+  const spring = { stiffness: 220, damping: 15, mass: 0.6 };
+  const sx = useSpring(px, spring);
+  const sy = useSpring(py, spring);
+  const rotateY = useTransform(sx, (v) => v * 14);
+  const rotateX = useTransform(sy, (v) => -v * 12);
+  const x = useTransform(sx, (v) => v * 10);
+  const y = useTransform(sy, (v) => v * 8);
+  const shine = useSpring(over, { stiffness: 200, damping: 30 });
+  const gx = useTransform(sx, (v) => `${(v + 0.5) * 100}%`);
+  const gy = useTransform(sy, (v) => `${(v + 0.5) * 100}%`);
+  const glare = useMotionTemplate`radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,0.28), rgba(255,255,255,0) 55%)`;
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    px.set(Math.max(-0.5, Math.min(0.5, (e.clientX - r.left) / r.width - 0.5)));
+    py.set(Math.max(-0.5, Math.min(0.5, (e.clientY - r.top) / r.height - 0.5)));
+    over.set(1);
+  };
+  const leave = () => {
+    px.set(0);
+    py.set(0);
+    over.set(0);
+  };
+  return (
+    <div className="magnet" style={{ width: w, height: h }} onPointerMove={move} onPointerLeave={leave}>
+      <motion.div
+        className="magnet-tilt"
+        style={{ width: w, height: h, rotateX, rotateY, x, y, borderRadius: radius }}
+        whileTap={{ scale: 0.97 }}
+        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      >
+        {children}
+        <motion.span className="magnet-shine" style={{ backgroundImage: glare, opacity: shine, borderRadius: radius }} />
+      </motion.div>
+    </div>
   );
 }

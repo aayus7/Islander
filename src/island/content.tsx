@@ -1,5 +1,5 @@
-import { AnimatePresence, motion, useMotionValue, useTransform } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { bridge, type MediaAction, type MediaSession, type OutputDevice } from "../bridge";
 import { fmtTime, livePosition, useArtColor, useNow } from "../lib/hooks";
 import { useSettings } from "../lib/settings";
@@ -83,7 +83,34 @@ export function MediaExpanded({
   // Just came back from the card: the shrinking cover keeps the sharp art until it lands,
   // and the rest of the player fades in behind it.
   const [returning, setReturning] = useState(false);
+  // Title and artist glide between their two places (beside the small cover / under the
+  // big one): measured just before the switch, then animated from there to where they land.
+  const titleEl = useRef<HTMLDivElement>(null);
+  const artistEl = useRef<HTMLDivElement>(null);
+  const flipFrom = useRef<DOMRect[] | null>(null);
+  const measureText = () => {
+    flipFrom.current = [titleEl.current, artistEl.current].every(Boolean)
+      ? [titleEl.current!.getBoundingClientRect(), artistEl.current!.getBoundingClientRect()]
+      : null;
+  };
+  useLayoutEffect(() => {
+    const from = flipFrom.current;
+    flipFrom.current = null;
+    if (!from) return;
+    [titleEl.current, artistEl.current].forEach((el, i) => {
+      if (!el) return;
+      const to = el.getBoundingClientRect();
+      const dx = from[i].left - to.left, dy = from[i].top - to.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      animate(el, { x: [dx, 0], y: [dy, 0] }, COVER_SPRING);
+    });
+  }, [big]);
+  const open = () => {
+    measureText();
+    setBig(true);
+  };
   const back = () => {
+    measureText();
     setBig(false);
     setReturning(true);
     // The island gets shorter under the cursor: stay open a moment instead of snapping shut.
@@ -196,12 +223,14 @@ export function MediaExpanded({
         <motion.div
           className="cover-text"
           style={{ width: card.w }}
-          initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ delay: 0.1, duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
         >
-          <Marquee text={session.title || "Unknown title"} className="title" />
-          <Marquee text={session.artist || session.app} className="subtitle" />
+          {/* The same title and artist as in the player, gliding down under the cover. */}
+          <motion.div ref={titleEl} className="cover-line">
+            <Marquee text={session.title || "Unknown title"} className="title" />
+          </motion.div>
+          <motion.div ref={artistEl} className="cover-line">
+            <Marquee text={session.artist || session.app} className="subtitle" />
+          </motion.div>
         </motion.div>
       </div>
     );
@@ -233,7 +262,7 @@ export function MediaExpanded({
             transition={{ type: "spring", stiffness: 260, damping: 17, mass: 0.9 }}
             onClick={(e) => {
               e.stopPropagation();
-              setBig(true);
+              open();
             }}
           >
             <ArtGlow src={session.artwork} playing={cur.playing} />
@@ -241,16 +270,21 @@ export function MediaExpanded({
           </motion.div>
         </motion.div>
         <div
-          className="col open-src"
+          className="col open-src mx-titles"
           title={`Open ${session.app}`}
-          style={{ flex: 1, minWidth: 0, gap: 1, overflow: "hidden" }}
+          style={{ flex: 1, minWidth: 0, gap: 1 }}
           onClick={(e) => {
             e.stopPropagation();
             onCommand("open");
           }}
         >
-          <Marquee text={session.title || "Unknown title"} className="title" />
-          <Marquee text={session.artist || session.app} className="subtitle" />
+          {/* Shared with the cover card: these glide between here and under the big cover. */}
+          <motion.div ref={titleEl} style={{ minWidth: 0 }}>
+            <Marquee text={session.title || "Unknown title"} className="title" />
+          </motion.div>
+          <motion.div ref={artistEl} style={{ minWidth: 0 }}>
+            <Marquee text={session.artist || session.app} className="subtitle" />
+          </motion.div>
         </div>
         <div style={{ width: 36, display: "flex", justifyContent: "flex-end", alignSelf: "center" }}>
           <Waveform playing={cur.playing} color={color} bars={6} height={20} barWidth={3} gap={2.2} />

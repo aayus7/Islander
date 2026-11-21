@@ -18,6 +18,8 @@ pub use imp::*;
 #[cfg(not(windows))]
 pub fn spawn_keys() {}
 #[cfg(not(windows))]
+pub fn volume_changed() {}
+#[cfg(not(windows))]
 pub fn set_banners(_app: &tauri::AppHandle, _on: bool) {}
 #[cfg(not(windows))]
 pub fn hush_app(_aumid: &str) {}
@@ -176,6 +178,108 @@ mod imp {
         });
     }
 
+    /* Third layer, for volume changes the keyboard hook never sees: an admin app in front
+     * (Windows doesn't let a normal app's hook see keys then), the hook dropped by Windows
+     * for a moment, or volume changed by a headset, a knob or vendor software. Windows
+     * reports every window that appears; when its volume popup appears right after the
+     * volume changed (from any source), it's minimised on the spot. */
+
+    static VOL_AT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    fn now_ms() -> u64 {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    }
+
+    /// Called on every volume / mute change, whatever caused it (hud.rs).
+    pub fn volume_changed() {
+        VOL_AT.store(now_ms(), Ordering::Relaxed);
+        // Popup already known: if it's up, put it away right now.
+        let known = OSD.load(Ordering::Relaxed);
+        if KEYS.load(Ordering::Relaxed) && known != 0 {
+            let h = windows::Win32::Foundation::HWND(known as _);
+            if visible_now(h) {
+                unsafe {
+                    let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindow(h, windows::Win32::UI::WindowsAndMessaging::SW_MINIMIZE);
+                }
+            }
+        }
+    }
+
+    /// Is this one of the windows Windows' volume popup lives in?
+    fn is_osd_window(h: windows::Win32::Foundation::HWND) -> bool {
+        use windows::core::w;
+        use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, GetClassNameW};
+        let mut buf = [0u16; 64];
+        let n = unsafe { GetClassNameW(h, &mut buf) }.max(0) as usize;
+        let class = String::from_utf16_lossy(&buf[..n]);
+        let child = |inner: PCWSTR, name: PCWSTR| unsafe { FindWindowExW(Some(h), None, inner, name).map(|c| !c.0.is_null()).unwrap_or(false) };
+        match class.as_str() {
+            "XamlExplorerHostIslandWindow" => child(w!("Windows.UI.Composition.DesktopWindowContentBridge"), w!("DesktopWindowXamlSource")),
+            "NativeHWNDHost" => child(w!("DirectUIHWND"), PCWSTR::null()),
+            _ => false,
+        }
+    }
+
+    unsafe extern "system" fn on_window_shown(
+        _hook: windows::Win32::UI::Accessibility::HWINEVENTHOOK,
+        _event: u32,
+        hwnd: windows::Win32::Foundation::HWND,
+        id_object: i32,
+        _child: i32,
+        _thread: u32,
+        _time: u32,
+    ) {
+        if id_object != 0 || hwnd.0.is_null() || !KEYS.load(Ordering::Relaxed) {
+            return; // OBJID_WINDOW only
+        }
+        let known = OSD.load(Ordering::Relaxed);
+        let is_known = known != 0 && hwnd.0 as isize == known;
+        // Only right after a volume change: the same kind of window also hosts other parts
+        // of the shell, which must never be touched.
+        let recent = now_ms().saturating_sub(VOL_AT.load(Ordering::Relaxed)) < 1500;
+        if is_known || (recent && is_osd_window(hwnd)) {
+            hide_osd(hwnd, is_known);
+        } else if is_osd_window(hwnd) {
+            // The popup can come up a moment before the volume watcher (50 ms) notices the
+            // change: look again shortly, and hide it then if a volume change came with it.
+            let raw = hwnd.0 as isize;
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(90));
+                let h = windows::Win32::Foundation::HWND(raw as _);
+                if now_ms().saturating_sub(VOL_AT.load(Ordering::Relaxed)) < 1500 && visible_now(h) {
+                    hide_osd(h, false);
+                }
+            });
+        }
+    }
+
+    fn hide_osd(hwnd: windows::Win32::Foundation::HWND, known: bool) {
+        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_MINIMIZE};
+        unsafe {
+            let _ = ShowWindow(hwnd, SW_MINIMIZE);
+        }
+        if !known {
+            OSD.store(hwnd.0 as isize, Ordering::Relaxed);
+            crate::log_line("keys: Windows' volume popup appeared after a volume change; hidden".into());
+        }
+    }
+
+    fn spawn_osd_watch() {
+        std::thread::spawn(|| unsafe {
+            use windows::Win32::UI::Accessibility::SetWinEventHook;
+            use windows::Win32::UI::WindowsAndMessaging::{EVENT_OBJECT_SHOW, EVENT_SYSTEM_MINIMIZEEND, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS};
+            let flags = WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS;
+            // A window appearing, or the (minimised) popup being brought back by Windows.
+            let a = SetWinEventHook(EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW, None, Some(on_window_shown), 0, 0, flags);
+            let b = SetWinEventHook(EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZEEND, None, Some(on_window_shown), 0, 0, flags);
+            if a.is_invalid() && b.is_invalid() {
+                crate::log_line("keys: couldn't watch for Windows' volume popup".into());
+                return;
+            }
+            let mut msg = MSG::default();
+            while GetMessageW(&mut msg, None, 0, 0).as_bool() {}
+        });
+    }
+
     /// Give Windows its volume popup back (quitting, or the option turned off).
     pub fn restore_osd() {
         use windows::Win32::UI::WindowsAndMessaging::{IsIconic, ShowWindow, SW_HIDE, SW_RESTORE};
@@ -284,6 +388,7 @@ mod imp {
     }
 
     pub fn spawn_keys() {
+        spawn_osd_watch();
         let (tx, rx) = channel::<Key>();
         let _ = TX.set(Mutex::new(tx));
         // Worker: does the (COM) work so the hook itself returns instantly.
@@ -315,9 +420,10 @@ mod imp {
                     return;
                 }
             };
-            // …and re-install it every 20 s, so even if Windows dropped it once (PC under
-            // heavy load, waking from sleep) it's back almost at once.
-            let timer = SetTimer(None, 0, 20_000, None);
+            // …and re-install it every 5 s, so even if Windows dropped it (PC under heavy
+            // load, waking from sleep) it's back almost at once. (The popup watcher above
+            // covers those few seconds.)
+            let timer = SetTimer(None, 0, 5_000, None);
             let mut msg = MSG::default();
             while GetMessageW(&mut msg, None, 0, 0).as_bool() {
                 if msg.message == WM_TIMER {

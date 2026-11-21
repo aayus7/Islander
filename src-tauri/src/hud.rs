@@ -96,11 +96,13 @@ pub mod imp {
                     last_vol = Some(cur);
                     let _ = app.emit("hud://show", HudEvent { kind: "mute", value: cur.0 as f64, on: cur.1 });
                     crate::hud_peek();
+                    crate::takeover::volume_changed();
                 }
                 Some(prev) if (prev.0 - cur.0).abs() > 0.004 => {
                     last_vol = Some(cur);
                     let _ = app.emit("hud://show", HudEvent { kind: "volume", value: cur.0 as f64, on: cur.1 });
                     crate::hud_peek();
+                    crate::takeover::volume_changed();
                 }
                 _ => {}
             }

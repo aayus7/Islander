@@ -26,6 +26,8 @@ export interface MediaSession {
   audible?: boolean;
   /** Playback speed (1 = normal). */
   rate?: number;
+  /** IMDb id when this is a movie/episode we matched (set by the poster lookup). */
+  imdb?: string;
   /** Where the data came from: Windows' media API or the browser extension. */
   source?: "windows" | "extension";
   /** Live stream: show the LIVE bar instead of timestamps. */

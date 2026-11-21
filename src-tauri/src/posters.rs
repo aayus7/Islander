@@ -13,6 +13,8 @@ use std::sync::Mutex;
 
 #[derive(serde::Serialize, Clone)]
 pub struct MovieInfo {
+    /// IMDb id (tt…), used to fetch the large poster for the cover card.
+    pub id: String,
     /// data: URL of the poster image.
     pub poster: String,
     pub title: String,
@@ -116,20 +118,13 @@ fn lookup(query: &str, year: Option<u32>, series: bool, season: Option<u32>, epi
         let Some(m) = pick.filter(|m| m.id.starts_with("tt")) else { continue };
         let img = format!("https://images.metahub.space/poster/medium/{}/img", m.id);
         if let Some(bytes) = http_get(&img).filter(|b| b.len() > 512) {
-            use base64::Engine;
-            let mime = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
-                "image/png"
-            } else if bytes.starts_with(b"RIFF") {
-                "image/webp"
-            } else {
-                "image/jpeg"
-            };
-            let poster = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+            let poster = data_url(&bytes);
             // Full record: real title, year, director (series: creator), episode name.
             let full = http_get(&format!("https://v3-cinemeta.strem.io/meta/{kind}/{}.json", m.id))
                 .and_then(|b| serde_json::from_slice::<MetaResp>(&b).ok())
                 .and_then(|r| r.meta);
             let mut info = MovieInfo {
+                id: m.id.clone(),
                 poster,
                 title: m.name.clone(),
                 year: (!m.release_info.is_empty()).then(|| m.release_info.clone()),
@@ -158,6 +153,162 @@ fn lookup(query: &str, year: Option<u32>, series: bool, season: Option<u32>, epi
         }
     }
     None
+}
+
+fn data_url(bytes: &[u8]) -> String {
+    use base64::Engine;
+    let mime = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        "image/png"
+    } else if bytes.starts_with(b"RIFF") {
+        "image/webp"
+    } else {
+        "image/jpeg"
+    };
+    format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+/* ---------- Large artwork for the cover card ---------- */
+//
+// Windows hands media apps' covers over small (Spotify: ~300 px), which looks soft when
+// the cover grows into the big card. This finds the same cover at full size:
+// - a movie/episode (IMDb id): MetaHub's large poster;
+// - music: Apple's iTunes Search (covers up to 1200 px), then Deezer (1000 px). Only a
+//   result whose artist AND title agree with what's playing is used: a sharp wrong cover
+//   (a live version, a cover band) is worse than a soft right one.
+// Free services, no key; only the artist and title are sent. Results (misses too) are
+// remembered for the session.
+
+static ART_CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+
+#[tauri::command]
+pub async fn hires_art(artist: String, title: String, album: String, imdb: Option<String>) -> Option<String> {
+    let key = format!("{}|{}|{}|{:?}", artist.to_lowercase(), title.to_lowercase(), album.to_lowercase(), imdb);
+    let hit = { ART_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).get(&key).cloned() };
+    if let Some(hit) = hit {
+        return hit;
+    }
+    let found = tauri::async_runtime::spawn_blocking(move || {
+        if let Some(id) = imdb.filter(|i| i.starts_with("tt")) {
+            return http_get(&format!("https://images.metahub.space/poster/large/{id}/img"))
+                .filter(|b| b.len() > 2048)
+                .map(|b| data_url(&b));
+        }
+        music_art(&artist, &title, &album)
+    })
+    .await
+    .ok()
+    .flatten();
+    ART_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(key, found.clone());
+    found
+}
+
+/// Title without the parts stores spell differently: "(feat. X)", "- Remastered 2011",
+/// "(From "8 Mile")", "[Live]"…
+fn core_title(t: &str) -> String {
+    let mut s = t.to_string();
+    for (open, close) in [('(', ')'), ('[', ']')] {
+        while let (Some(a), Some(b)) = (s.find(open), s.find(close)) {
+            if b <= a {
+                break;
+            }
+            s.replace_range(a..=b, " ");
+        }
+    }
+    if let Some(i) = s.find(" - ") {
+        s.truncate(i);
+    }
+    norm(&s)
+}
+
+/// First credited artist ("A, B & C" / "A feat. B" → "a").
+fn main_artist(a: &str) -> String {
+    let lower = a.to_lowercase();
+    let cut = [",", " & ", " feat", " ft.", " x ", " and ", ";"].iter().filter_map(|sep| lower.find(sep)).min().unwrap_or(lower.len());
+    let first = lower[..cut].trim();
+    norm(first.strip_prefix("the ").unwrap_or(first))
+}
+
+/// Same name, allowing small extras ("the weeknd" / "weeknd") but not a different one
+/// that merely contains it ("dance" / "one dance", "drake" / "drake bell").
+fn same(a: &str, b: &str) -> bool {
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    if a == b {
+        return true;
+    }
+    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    long.contains(short) && short.len() * 4 >= long.len() * 3
+}
+
+#[derive(serde::Deserialize)]
+struct ItunesResp {
+    #[serde(default)]
+    results: Vec<ItunesHit>,
+}
+#[derive(serde::Deserialize)]
+struct ItunesHit {
+    #[serde(default, rename = "artistName")]
+    artist: String,
+    #[serde(default, rename = "trackName")]
+    track: String,
+    #[serde(default, rename = "collectionName")]
+    album: String,
+    #[serde(default, rename = "artworkUrl100")]
+    art: String,
+}
+
+#[derive(serde::Deserialize)]
+struct DeezerResp {
+    #[serde(default)]
+    data: Vec<DeezerHit>,
+}
+#[derive(serde::Deserialize)]
+struct DeezerHit {
+    #[serde(default)]
+    title: String,
+    artist: Option<DeezerName>,
+    album: Option<DeezerAlbum>,
+}
+#[derive(serde::Deserialize)]
+struct DeezerName {
+    #[serde(default)]
+    name: String,
+}
+#[derive(serde::Deserialize)]
+struct DeezerAlbum {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    cover_xl: String,
+}
+
+fn music_art(artist: &str, title: &str, album: &str) -> Option<String> {
+    let (want_a, want_t, want_al) = (main_artist(artist), core_title(title), core_title(album));
+    if want_a.is_empty() || want_t.is_empty() {
+        return None;
+    }
+    // Among the agreeing results, the one from the same album wins.
+    let pick = |cands: Vec<(String, String, String, String)>| -> Option<String> {
+        let ok: Vec<_> = cands.into_iter().filter(|(a, t, _, url)| !url.is_empty() && same(&main_artist(a), &want_a) && same(&core_title(t), &want_t)).collect();
+        ok.iter().find(|(_, _, al, _)| same(&core_title(al), &want_al)).or_else(|| ok.first()).map(|c| c.3.clone())
+    };
+    let term = format!("{} {}", artist, title);
+    let itunes = http_get(&format!("https://itunes.apple.com/search?media=music&entity=song&limit=15&term={}", encode(&term)))
+        .and_then(|b| serde_json::from_slice::<ItunesResp>(&b).ok())
+        .and_then(|r| pick(r.results.into_iter().map(|h| (h.artist, h.track, h.album, h.art.replace("100x100bb", "1200x1200bb"))).collect()));
+    let url = itunes.or_else(|| {
+        let q = format!("artist:\"{}\" track:\"{}\"", artist.replace('"', ""), title.replace('"', ""));
+        http_get(&format!("https://api.deezer.com/search?limit=15&q={}", encode(&q)))
+            .and_then(|b| serde_json::from_slice::<DeezerResp>(&b).ok())
+            .and_then(|r| {
+                pick(r.data.into_iter().map(|h| {
+                    let (al, cover) = h.album.map(|a| (a.title, a.cover_xl)).unwrap_or_default();
+                    (h.artist.map(|a| a.name).unwrap_or_default(), h.title, al, cover)
+                }).collect())
+            })
+    })?;
+    http_get(&url).filter(|b| b.len() > 2048).map(|b| data_url(&b))
 }
 
 fn encode(s: &str) -> String {

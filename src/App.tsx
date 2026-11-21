@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { bridge, type MediaSession, type MediaState } from "./bridge";
 import { Island } from "./island/Island";
 import { usePosterArt } from "./lib/posters";
+import { usePrefetchHiRes } from "./lib/hires";
 
 export function App() {
   const [media, setMedia] = useState<MediaState>({ sessions: [], currentId: null });
@@ -25,6 +26,8 @@ export function App() {
   // Movies/episodes in video players get their poster as artwork.
   const sessions = usePosterArt(media.sessions);
   const session = pickSession({ ...media, sessions }, selectedId);
+  // Large covers for the cover card, fetched as soon as something starts playing.
+  usePrefetchHiRes(sessions);
 
   return (
     <Island

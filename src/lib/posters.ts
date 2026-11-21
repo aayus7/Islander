@@ -27,6 +27,7 @@ export interface PosterQuery {
 
 /** What the backend returns for a match. */
 interface MovieInfo {
+  id: string;
   poster: string;
   title: string;
   year: string | null;
@@ -127,6 +128,6 @@ export function usePosterArt(sessions: MediaSession[]): MediaSession[] {
     const sub = q.series
       ? [q.season != null && q.episode != null ? `S${q.season} E${q.episode}` : "", m.episode ?? ""].filter(Boolean).join(" · ")
       : m.director ?? (year ? year : "");
-    return { ...s, artwork: m.poster, title: m.title, artist: sub || s.artist };
+    return { ...s, artwork: m.poster, title: m.title, artist: sub || s.artist, imdb: m.id || undefined };
   });
 }

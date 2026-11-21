@@ -433,6 +433,7 @@ fn main() {
             system::reveal_path,
             dlmgr::download_cancel,
             posters::movie_poster,
+            posters::hires_art,
             geo::geo_position,
             island_move_start,
             island_move_place,

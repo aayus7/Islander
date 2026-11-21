@@ -21,31 +21,39 @@ export function Artwork({ src, size, height, radius, style }: { src: string | nu
 
 /* ---------- Artwork shape ---------- */
 
-const aspects = new Map<string, number>(); // src → height / width
+const sizes = new Map<string, { w: number; h: number }>(); // src → natural size
 
-/**
- * Height ÷ width of an image (1 until it has loaded). Lets tall artwork — movie posters —
- * be shown whole at its own shape instead of cropped into a square.
- */
-export function useArtAspect(src: string | null): number {
-  const [r, setR] = useState(() => (src && aspects.get(src)) || 1);
+/** Natural pixel size of an image (null until it has loaded). */
+export function useArtSize(src: string | null): { w: number; h: number } | null {
+  const [sz, setSz] = useState(() => (src ? sizes.get(src) ?? null : null));
   useEffect(() => {
-    if (!src) return setR(1);
-    const hit = aspects.get(src);
-    if (hit) return setR(hit);
+    if (!src) return setSz(null);
+    const hit = sizes.get(src);
+    if (hit) return setSz(hit);
+    setSz(null);
     let alive = true;
     const img = new Image();
     img.onload = () => {
-      const v = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1;
-      aspects.set(src, v);
-      if (alive) setR(v);
+      const v = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
+      sizes.set(src, v);
+      if (sizes.size > 60) sizes.delete(sizes.keys().next().value!);
+      if (alive) setSz(v);
     };
     img.src = src;
     return () => {
       alive = false;
     };
   }, [src]);
-  return r;
+  return sz;
+}
+
+/**
+ * Height ÷ width of an image (1 until it has loaded). Lets tall artwork — movie posters —
+ * be shown whole at its own shape instead of cropped into a square.
+ */
+export function useArtAspect(src: string | null): number {
+  const sz = useArtSize(src);
+  return sz ? sz.h / sz.w : 1;
 }
 
 /* ---------- Waveform: driven by what the PC is actually playing ---------- */

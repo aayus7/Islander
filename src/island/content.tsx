@@ -4,7 +4,8 @@ import { bridge, type MediaAction, type MediaSession, type OutputDevice } from "
 import { fmtTime, livePosition, useArtColor, useNow } from "../lib/hooks";
 import { useSettings } from "../lib/settings";
 import { NumericText } from "./modules/ui";
-import { Artwork, useArtAspect, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, PauseIcon, PlayIcon, SkipIcon, Waveform } from "./parts";
+import { Artwork, useArtAspect, useArtSize, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, PauseIcon, PlayIcon, SkipIcon, Waveform } from "./parts";
+import { useHiRes } from "../lib/hires";
 
 /* ---------- Compact: art on the left, waveform on the right ---------- */
 
@@ -74,9 +75,37 @@ export function MediaExpanded({
   const artH = tall ? Math.min(Math.round(64 * ratio), 104) : 64;
   const artW = tall ? Math.round(artH / ratio) : 64;
   const artExtra = artH - 64;
+
+  // ---- Cover card: click the cover and it grows to fill the player; click (or Esc) to go back.
+  const [big, setBig] = useState(false);
+  // Just came back from the card: the shrinking cover keeps the sharp art until it lands,
+  // and the rest of the player fades in behind it.
+  const [returning, setReturning] = useState(false);
+  const back = () => {
+    setBig(false);
+    setReturning(true);
+    // The island gets shorter under the cursor: stay open a moment instead of snapping shut.
+    bridge.setHold(true);
+    window.setTimeout(() => bridge.setHold(false), 700);
+    window.setTimeout(() => setReturning(false), 650);
+  };
+  const hi = useHiRes(session);
+  const hiSize = useArtSize(hi.url);
+  const loSize = useArtSize(session?.artwork ?? null);
+  const card = coverCard(hi.url ? hiSize : loSize, !!hi.url || hi.pending, loSize, height);
   useEffect(() => {
-    onExtraHeight?.(listH + artExtra);
-  }, [listH, artExtra, onExtraHeight]);
+    if (!big) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && back();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [big]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!session) setBig(false);
+  }, [session]);
+
+  useEffect(() => {
+    onExtraHeight?.(big ? card.extra : listH + artExtra);
+  }, [big, card.extra, listH, artExtra, onExtraHeight]);
   useEffect(() => () => onExtraHeight?.(0), [onExtraHeight]);
 
   // Optimistic UI: show the result of a seek / play-pause instantly, then hand back to
@@ -123,25 +152,87 @@ export function MediaExpanded({
     onCommand(`seek:${target}`);
   };
 
-  return (
-    <div className="media-x" style={{ width, minHeight: height }}>
-      <div className="row" style={{ gap: 14, height: artH }}>
-        {/* Like iOS Music: the cover eases back a touch when paused, springs forward on play. */}
+  if (big) {
+    return (
+      <div
+        className="cover-card"
+        style={{ width, height: height + card.extra }}
+        title="Back to the player"
+        onClick={(e) => {
+          e.stopPropagation();
+          back();
+        }}
+      >
         <motion.div
-          className="open-src"
-          title={`Open ${session.app}`}
-          style={{ position: "relative", width: 64, height: artH, flexShrink: 0, isolation: "isolate", display: "flex", justifyContent: "center" }}
-          initial={false}
-          animate={{ scale: cur.playing ? 1 : 0.93 }}
-          whileTap={{ scale: cur.playing ? 0.94 : 0.88 }}
-          transition={{ type: "spring", stiffness: 260, damping: 17, mass: 0.9 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onCommand("open");
-          }}
+          layoutId="mx-cover"
+          className="cover-big"
+          style={{ width: card.w, height: card.h, borderRadius: 20 }}
+          transition={COVER_SPRING}
         >
           <ArtGlow src={session.artwork} playing={cur.playing} />
-          <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={artW} height={artH} radius={tall ? 10 : 14} />
+          {session.artwork && <img className="cover-lo" src={session.artwork} alt="" draggable={false} style={{ filter: hi.url ? "none" : "blur(3px)" }} />}
+          <AnimatePresence>
+            {hi.url && (
+              <motion.img
+                key={hi.url}
+                className="cover-hi"
+                src={hi.url}
+                alt=""
+                draggable={false}
+                initial={{ opacity: 0, filter: "blur(6px)" }}
+                animate={{ opacity: 1, filter: "blur(0px)" }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+              />
+            )}
+          </AnimatePresence>
+          {!session.artwork && !hi.url && <NoteIcon size={64} />}
+        </motion.div>
+        <motion.div
+          className="cover-text"
+          style={{ width: Math.max(card.w, 240) }}
+          initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ delay: 0.1, duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}
+        >
+          <Marquee text={session.title || "Unknown title"} className="title" />
+          <Marquee text={session.artist || session.app} className="subtitle" />
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`media-x${returning ? " returning" : ""}`} style={{ width, minHeight: height }}>
+      <div className="row" style={{ gap: 14, height: artH }}>
+        {/* Like iOS Music: the cover eases back a touch when paused, springs forward on play. */}
+        <motion.div layoutId="mx-cover" transition={COVER_SPRING} style={{ position: "relative", width: 64, height: artH, flexShrink: 0, borderRadius: tall ? 10 : 14 }}>
+          {returning && (hi.url || session.artwork) && (
+            <motion.img
+              className="cover-hi cover-landing"
+              src={hi.url ?? session.artwork!}
+              alt=""
+              draggable={false}
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 0 }}
+              transition={{ duration: 0.22, delay: 0.3 }}
+            />
+          )}
+          <motion.div
+            className="open-src"
+            title="Show the cover"
+            style={{ position: "relative", width: 64, height: artH, isolation: "isolate", display: "flex", justifyContent: "center" }}
+            initial={false}
+            animate={{ scale: cur.playing ? 1 : 0.93 }}
+            whileTap={{ scale: cur.playing ? 0.94 : 0.88 }}
+            transition={{ type: "spring", stiffness: 260, damping: 17, mass: 0.9 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setBig(true);
+            }}
+          >
+            <ArtGlow src={session.artwork} playing={cur.playing} />
+            <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={artW} height={artH} radius={tall ? 10 : 14} />
+          </motion.div>
         </motion.div>
         <div
           className="col open-src"
@@ -872,4 +963,27 @@ function Skip10Icon({ size = 30, dir }: { size?: number; dir: 1 | -1 }) {
       </text>
     </svg>
   );
+}
+
+/** The grow/shrink between the small cover and the card: quick, with a soft landing. */
+const COVER_SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.9 };
+
+/**
+ * Size of the cover card for an image of `size` (natural pixels). Square covers get 300 px,
+ * wide ones (videos) up to the player's width, tall posters up to 340 px high. With no
+ * large copy coming, the card never shows the art more than ~25 % past its real
+ * resolution, so a small cover doesn't turn to mush (never smaller than 170 px).
+ * `extra` is how much taller than the player the island has to grow.
+ */
+function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { w: number; h: number } | null, base: number) {
+  const r = size ? size.h / size.w : 1;
+  let w = r < 0.9 ? 328 : r > 1.15 ? Math.round(340 / r) : 300;
+  if (!sharp && lo) {
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    w = Math.min(w, Math.round((lo.w / dpr) * 1.25));
+  }
+  w = Math.max(170, w);
+  const h = Math.round(w * r);
+  const total = 22 + h + 14 + 44 + 22; // top, cover, gap, title + artist, bottom
+  return { w, h, extra: Math.max(0, total - base) };
 }

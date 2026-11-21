@@ -96,7 +96,9 @@ export function MediaExpanded({
   const coverEl = useRef<HTMLDivElement>(null);
   const titleEl = useRef<HTMLDivElement>(null);
   const artistEl = useRef<HTMLDivElement>(null);
-  const flipFrom = useRef<{ cover: DOMRect; radius: number; text: DOMRect[] } | null>(null);
+  const scrubEl = useRef<HTMLDivElement>(null);
+  const transportEl = useRef<HTMLDivElement>(null);
+  const flipFrom = useRef<{ cover: DOMRect; radius: number; text: DOMRect[]; scrub: DOMRect | null; transport: DOMRect | null } | null>(null);
   const measureText = () => {
     const els = [coverEl.current, titleEl.current, artistEl.current];
     flipFrom.current = els.every(Boolean)
@@ -104,6 +106,8 @@ export function MediaExpanded({
           cover: coverEl.current!.getBoundingClientRect(),
           radius: parseFloat(getComputedStyle(coverEl.current!).borderTopLeftRadius) || 14,
           text: [titleEl.current!.getBoundingClientRect(), artistEl.current!.getBoundingClientRect()],
+          scrub: scrubEl.current?.getBoundingClientRect() ?? null,
+          transport: transportEl.current?.getBoundingClientRect() ?? null,
         }
       : null;
   };
@@ -137,6 +141,20 @@ export function MediaExpanded({
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
       animate(el, { x: [dx, 0], y: [dy, 0] }, COVER_SPRING);
     });
+    // The buttons keep their size: they just travel (by their centres).
+    const t = transportEl.current;
+    if (t && from.transport) {
+      const to = t.getBoundingClientRect();
+      const dx = from.transport.left + from.transport.width / 2 - (to.left + to.width / 2), dy = from.transport.top - to.top;
+      animate(t, { x: [dx, 0], y: [dy, 0] }, COVER_SPRING);
+    }
+    // The scrubber travels and stretches/shrinks to its new width.
+    const b = scrubEl.current;
+    if (b && from.scrub) {
+      const to = b.getBoundingClientRect();
+      b.style.transformOrigin = "0 0";
+      animate(b, { x: [from.scrub.left - to.left, 0], y: [from.scrub.top - to.top, 0], scaleX: [from.scrub.width / to.width, 1] }, COVER_SPRING);
+    }
   }, [big]);
   const open = () => {
     measureText();
@@ -263,6 +281,12 @@ export function MediaExpanded({
     </div>
   );
 
+  const seek = (target: number) => {
+    setPending({ id: session.id, at: Date.now(), pos: target, playing: cur.playing });
+    onCommand(`seek:${target}`);
+  };
+  const timeline = session.live ? <LiveBar /> : dur > 0 ? <Scrubber s={cur} dur={dur} canSeek={session.canSeek} onSeek={seek} /> : null;
+
   if (big) {
     return (
       <div
@@ -314,8 +338,13 @@ export function MediaExpanded({
             <Marquee text={session.artist || session.app} className="subtitle" />
           </motion.div>
         </motion.div>
+        {timeline && (
+          <div ref={scrubEl} className="cover-scrub" style={{ width: card.w }} onClick={(e) => e.stopPropagation()}>
+            {timeline}
+          </div>
+        )}
         <div className="cover-ctrls" onClick={(e) => e.stopPropagation()}>
-          {transport}
+          <div ref={transportEl}>{transport}</div>
         </div>
       </div>
     );
@@ -371,24 +400,12 @@ export function MediaExpanded({
             <Marquee text={session.artist || session.app} className="subtitle" />
           </motion.div>
         </div>
-        <div style={{ width: 36, display: "flex", justifyContent: "flex-end", alignSelf: "center" }}>
+        <div className="mx-fade" style={{ width: 36, display: "flex", justifyContent: "flex-end", alignSelf: "center" }}>
           <Waveform playing={cur.playing} color={color} bars={6} height={20} barWidth={3} gap={2.2} />
         </div>
       </div>
 
-      {session.live ? (
-        <LiveBar />
-      ) : dur > 0 && (
-        <Scrubber
-          s={cur}
-          dur={dur}
-          canSeek={session.canSeek}
-          onSeek={(target) => {
-            setPending({ id: session.id, at: Date.now(), pos: target, playing: cur.playing });
-            onCommand(`seek:${target}`);
-          }}
-        />
-      )}
+      {timeline && <div ref={scrubEl}>{timeline}</div>}
 
       <AnimatePresence initial={false}>
         {routesOpen && (
@@ -415,9 +432,11 @@ export function MediaExpanded({
 
       <div className="controls" style={{ marginTop: dur > 0 || session.live ? 10 : 20 }}>
         {/* (video players get ±10 s buttons instead of previous/next) */}
-        <SourceIcons sessions={sessions} activeId={session.id} onSelect={onSelect} />
-        {transport}
-        <div style={{ width: 86, display: "flex", justifyContent: "flex-end" }}>
+        <div className="mx-fade">
+          <SourceIcons sessions={sessions} activeId={session.id} onSelect={onSelect} />
+        </div>
+        <div ref={transportEl}>{transport}</div>
+        <div className="mx-fade" style={{ width: 86, display: "flex", justifyContent: "flex-end" }}>
           <OutputButton kind={deviceKind(current?.name ?? "")} accent={color} active={routesOpen} onClick={() => setRoutesOpen((o) => !o)} />
         </div>
       </div>
@@ -1089,6 +1108,6 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
   w = Math.max(170, w);
   const h = Math.round(w * r);
   const boxW = w + CARD_PAD * 2;
-  const total = CARD_PAD + h + 14 + 44 + 6 + 46 + 18; // top gap, cover, gap, title + artist, gap, controls, bottom
+  const total = CARD_PAD + h + 14 + 44 + 14 + 18 + 6 + 46 + 18; // top gap, cover, gap, title + artist, gap, scrubber, gap, controls, bottom
   return { w, h, boxW, extra: Math.max(0, total - base) };
 }

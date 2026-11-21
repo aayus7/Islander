@@ -105,9 +105,10 @@ button { font: inherit; color: inherit; }
 .cover-line { max-width: 100%; min-width: 0; }
 .cover-face { position: relative; overflow: hidden; background: #2c2c2e; display: flex; align-items: center; justify-content: center; }
 .cover-ctrls { display: flex; justify-content: center; margin-top: -8px; cursor: default; }
+.cover-scrub { cursor: default; margin-top: -14px; }
 .cover-landing { z-index: 3; pointer-events: none; }
 /* Back from the card: everything but the cover fades in as the cover lands. */
-.media-x.returning > :not(.row), .media-x.returning > .row > :not(:first-child):not(.mx-titles) { animation: mx-in 0.34s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.media-x.returning .mx-fade { animation: mx-in 0.34s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 @keyframes mx-in { from { opacity: 0; filter: blur(4px); transform: translateY(-4px); } to { opacity: 1; filter: none; transform: none; } }
 /* Wide enough for "1:00:33"; the bar takes whatever is left. */
 .time { font-size: 12px; font-weight: 600; color: var(--label2); min-width: 40px; flex-shrink: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }

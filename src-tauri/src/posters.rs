@@ -171,7 +171,7 @@ fn data_url(bytes: &[u8]) -> String {
 //
 // Windows hands media apps' covers over small (Spotify: ~300 px), which looks soft when
 // the cover grows into the big card. This finds the same cover at full size:
-// - a movie/episode (IMDb id): MetaHub's large poster;
+// - a movie/episode (IMDb id): IMDb's own poster at 1000 px (MetaHub's large one if not);
 // - music: Apple's iTunes Search, then Deezer (both asked at once), 500–600 px. Only a
 //   result whose artist AND title agree with what's playing is used: a sharp wrong cover
 //   (a live version, a cover band) is worse than a soft right one.
@@ -189,9 +189,12 @@ pub async fn hires_art(artist: String, title: String, album: String, imdb: Optio
     }
     let found = tauri::async_runtime::spawn_blocking(move || {
         if let Some(id) = imdb.filter(|i| i.starts_with("tt")) {
-            return http_get(&format!("https://images.metahub.space/poster/large/{id}/img"))
-                .filter(|b| b.len() > 2048)
-                .map(|b| data_url(&b));
+            // IMDb's own poster at 1000 px wide; MetaHub's large poster if that fails.
+            return imdb_poster(&id).or_else(|| {
+                http_get(&format!("https://images.metahub.space/poster/large/{id}/img"))
+                    .filter(|b| b.len() > 2048)
+                    .map(|b| data_url(&b))
+            });
         }
         music_art(&artist, &title, &album)
     })
@@ -200,6 +203,40 @@ pub async fn hires_art(artist: String, title: String, album: String, imdb: Optio
     .flatten();
     ART_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(key, found.clone());
     found
+}
+
+#[derive(serde::Deserialize)]
+struct ImdbSuggest {
+    #[serde(default)]
+    d: Vec<ImdbHit>,
+}
+#[derive(serde::Deserialize)]
+struct ImdbHit {
+    #[serde(default)]
+    id: String,
+    i: Option<ImdbImage>,
+}
+#[derive(serde::Deserialize)]
+struct ImdbImage {
+    #[serde(default, rename = "imageUrl")]
+    url: String,
+}
+
+/// The title's poster from IMDb's image server, 1000 px wide. IMDb's search suggestions
+/// (free, no key; what imdb.com's own search box uses) give the original image, and its
+/// URL takes a size: "…_V1_.jpg" → "…_V1_UX1000_.jpg".
+fn imdb_poster(id: &str) -> Option<String> {
+    let body = http_get(&format!("https://v3.sg.media-imdb.com/suggestion/t/{id}.json"))?;
+    let hit = serde_json::from_slice::<ImdbSuggest>(&body).ok()?.d.into_iter().find(|h| h.id == id)?;
+    let url = hit.i?.url;
+    if !url.starts_with("https://") {
+        return None;
+    }
+    let sized = match url.rfind("._V1_") {
+        Some(i) => format!("{}._V1_UX1000_.jpg", &url[..i]),
+        None => url,
+    };
+    http_get(&sized).filter(|b| b.len() > 4096).map(|b| data_url(&b))
 }
 
 /// Title without the parts stores spell differently: "(feat. X)", "- Remastered 2011",

@@ -56,6 +56,60 @@ export function useArtAspect(src: string | null): number {
   return sz ? sz.h / sz.w : 1;
 }
 
+/* ---------- Pre-blurred artwork ---------- */
+//
+// Glows and the cover card's living background used to blur full-size art with CSS
+// filters, which the browser redoes on every frame while they move — the single most
+// expensive thing on screen. Instead each cover is blurred once, into a tiny image: a
+// blurred picture has no fine detail left, so stretching a 64 px one up looks the same,
+// and moving or fading it then costs next to nothing.
+//   "fill": edge to edge (the living background);
+//   "glow": the art in the middle fading out to transparent around it (glows), shown
+//           ~24 % larger than the art it sits behind.
+
+const blurred = new Map<string, string | null>();
+const blurWaiting = new Map<string, Array<() => void>>();
+
+function makeBlurred(src: string, kind: "fill" | "glow", done: () => void) {
+  const key = `${kind}|${src}`;
+  if (blurred.has(key)) return done();
+  const q = blurWaiting.get(key);
+  if (q) return void q.push(done);
+  blurWaiting.set(key, [done]);
+  const img = new Image();
+  const finish = (url: string | null) => {
+    blurred.set(key, url);
+    if (blurred.size > 80) blurred.delete(blurred.keys().next().value!);
+    blurWaiting.get(key)?.forEach((f) => f());
+    blurWaiting.delete(key);
+  };
+  img.onload = () => {
+    try {
+      const n = 64;
+      const c = document.createElement("canvas");
+      c.width = c.height = n;
+      const ctx = c.getContext("2d")!;
+      ctx.filter = kind === "fill" ? "blur(3px) saturate(1.6)" : "blur(4px) saturate(1.7)";
+      if (kind === "fill") ctx.drawImage(img, -6, -6, n + 12, n + 12); // past the edges: no dark rim
+      else ctx.drawImage(img, 6, 6, n - 12, n - 12);
+      finish(c.toDataURL(kind === "fill" ? "image/jpeg" : "image/png", 0.85));
+    } catch {
+      finish(null);
+    }
+  };
+  img.onerror = () => finish(null);
+  img.src = src;
+}
+
+/** A pre-blurred copy of `src` (null until it's ready, or if it can't be made). */
+export function useBlurred(src: string | null, kind: "fill" | "glow"): string | null {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (src) makeBlurred(src, kind, () => bump((n) => n + 1));
+  }, [src, kind]);
+  return src ? blurred.get(`${kind}|${src}`) ?? null : null;
+}
+
 /* ---------- Waveform: driven by what the PC is actually playing ---------- */
 
 // Bars aren't laid out low→high frequency (that reads as a staircase); iOS mixes them.

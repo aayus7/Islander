@@ -5,7 +5,7 @@ import { bridge, type MediaAction, type MediaSession, type OutputDevice } from "
 import { fmtTime, livePosition, useArtColor, useNow } from "../lib/hooks";
 import { useSettings } from "../lib/settings";
 import { NumericText } from "./modules/ui";
-import { Artwork, useArtAspect, useArtSize, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, PauseIcon, PlayIcon, SkipIcon, Waveform } from "./parts";
+import { Artwork, useArtAspect, useArtSize, useBlurred, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, PauseIcon, PlayIcon, SkipIcon, Waveform } from "./parts";
 import { useHiRes } from "../lib/hires";
 
 /* ---------- Compact: art on the left, waveform on the right ---------- */
@@ -908,7 +908,8 @@ function FlipArt({ src = null, trackKey, dir, size = 64, height, radius = 14, ch
  * Very soft ambient glow behind the artwork, in the artwork's own colours.
  * Breathes slowly while playing, fades almost away when paused, cross-fades on track change.
  */
-function ArtGlow({ src, playing }: { src: string | null; playing: boolean }) {
+function ArtGlow({ src: art, playing }: { src: string | null; playing: boolean }) {
+  const src = useBlurred(art, "glow");
   return (
     <AnimatePresence initial={false}>
       {src && (
@@ -1124,8 +1125,9 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
  * the beat and settling when the music is quiet (or paused). Driven by the same audio
  * levels as the waveform, through motion values, so it never re-renders React.
  */
-function CardGlow({ src, radius }: { src: string | null; radius: number }) {
+function CardGlow({ src: art, radius }: { src: string | null; radius: number }) {
   useEffect(startAudio, []);
+  const src = useBlurred(art, "glow");
   // Follows exactly what the waveform bars show (same levels, same curve, same snappy
   // spring), so the glow moves in step with the bars instead of a guess at the beat.
   const energy = useMotionValue(0);
@@ -1136,8 +1138,9 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
       // Stretch the usual range so quiet and loud moments look different.
       energy.set(Math.max(0, Math.min(1, (avg - 0.12) / 0.6)));
     };
-    const offs = levels.map((l) => l.on("change", update));
-    return () => offs.forEach((off) => off());
+    // All six bands are set together on each audio update: recompute once, on the last.
+    const off = levels[levels.length - 1].on("change", update);
+    return () => off();
   }, [energy]);
   // A little softer than the bars, so the glow flows rather than flickers.
   const e = useSpring(energy, { stiffness: 900, damping: 55, mass: 0.5 });
@@ -1218,22 +1221,26 @@ function MagnetCover({ w, h, radius, playing, children }: { w: number; h: number
  * text readable. Crossfades to the new colours on a track change. GPU-only (transforms on
  * blurred layers), and only while the card is open.
  */
-function LivingBg({ src }: { src: string | null }) {
+function LivingBg({ src: art }: { src: string | null }) {
+  // Base: edge to edge, oversized so its edges never show as it drifts. On top: two soft-
+  // edged copies (fading to transparent) wandering and turning, for the movement.
+  const fill = useBlurred(art, "fill");
+  const glow = useBlurred(art, "glow");
   return (
     <div className="living-bg" aria-hidden>
       <AnimatePresence initial={false}>
-        {src && (
+        {fill && (
           <motion.div
-            key={src}
+            key={fill}
             className="living-layers"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1.1, ease: "easeInOut" }}
           >
-            <span className="lb lb1" style={{ backgroundImage: `url("${src}")` }} />
-            <span className="lb lb2" style={{ backgroundImage: `url("${src}")` }} />
-            <span className="lb lb3" style={{ backgroundImage: `url("${src}")` }} />
+            <span className="lb lb1" style={{ backgroundImage: `url("${fill}")` }} />
+            {glow && <span className="lb lb2" style={{ backgroundImage: `url("${glow}")` }} />}
+            {glow && <span className="lb lb3" style={{ backgroundImage: `url("${glow}")` }} />}
           </motion.div>
         )}
       </AnimatePresence>

@@ -72,10 +72,16 @@ export function MediaExpanded({
   const listH = routesOpen ? 12 + 26 + Math.max(1, devices.length) * OUT_ROW_H + 6 : 0;
   // Tall artwork (movie posters, 2:3) is shown whole at its own shape, and the island grows
   // to fit it, instead of being cropped to a square. Square art keeps the 64×64 cover.
-  const ratio = useArtAspect(session?.artwork ?? null);
+  // A video's thumbnail at its real wide shape (the session's artwork is a square crop of it).
+  const wideSize = useArtSize(session?.artworkWide ?? null);
+  const wideArt = session?.artworkWide && wideSize && wideSize.w > wideSize.h * 1.2 ? session.artworkWide : null;
+  const smallSrc = wideArt ?? session?.artwork ?? null;
+  // Posters are shown taller and video thumbnails wider (same height), whole, not cropped.
+  const ratio = useArtAspect(smallSrc);
   const tall = ratio > 1.15;
+  const wide = ratio < 0.87;
   const artH = tall ? Math.min(Math.round(64 * ratio), 104) : 64;
-  const artW = tall ? Math.round(artH / ratio) : 64;
+  const artW = tall ? Math.round(artH / ratio) : wide ? Math.min(Math.round(64 / ratio), 114) : 64;
   const artExtra = artH - 64;
 
   // ---- Cover card: click the cover and it grows to fill the player; click (or Esc) to go back.
@@ -121,8 +127,6 @@ export function MediaExpanded({
   const hi = useHiRes(session);
   const hiSize = useArtSize(hi.url);
   // A video's thumbnail at its real wide shape (the player shows a square crop of it).
-  const wideSize = useArtSize(session?.artworkWide ?? null);
-  const wideArt = session?.artworkWide && wideSize && wideSize.w > wideSize.h * 1.2 ? session.artworkWide : null;
   const cardLo = wideArt ?? session?.artwork ?? null;
   const loSize = useArtSize(session?.artwork ?? null);
   const cardLoSize = wideArt ? wideSize : loSize;
@@ -295,11 +299,11 @@ export function MediaExpanded({
     <div className={`media-x${returning ? " returning" : ""}`} style={{ width, minHeight: height }}>
       <div className="row" style={{ gap: 14, height: artH }}>
         {/* Like iOS Music: the cover eases back a touch when paused, springs forward on play. */}
-        <motion.div layoutId="mx-cover" transition={COVER_SPRING} style={{ position: "relative", width: 64, height: artH, flexShrink: 0, borderRadius: tall ? 10 : 14 }}>
-          {returning && (hi.url || session.artwork) && (
+        <motion.div layoutId="mx-cover" transition={COVER_SPRING} style={{ position: "relative", width: artW, height: artH, flexShrink: 0, borderRadius: tall || wide ? 10 : 14 }}>
+          {returning && smallSrc && (
             <motion.img
               className="cover-hi cover-landing"
-              src={hi.url ?? session.artwork!}
+              src={(wideArt ? null : hi.url) ?? smallSrc!}
               alt=""
               draggable={false}
               initial={{ opacity: 1 }}
@@ -310,7 +314,7 @@ export function MediaExpanded({
           <motion.div
             className="open-src"
             title="Show the cover"
-            style={{ position: "relative", width: 64, height: artH, isolation: "isolate", display: "flex", justifyContent: "center" }}
+            style={{ position: "relative", width: artW, height: artH, isolation: "isolate", display: "flex", justifyContent: "center" }}
             initial={false}
             animate={{ scale: cur.playing ? 1 : 0.93 }}
             whileTap={{ scale: cur.playing ? 0.94 : 0.88 }}
@@ -320,8 +324,8 @@ export function MediaExpanded({
               open();
             }}
           >
-            <ArtGlow src={session.artwork} playing={cur.playing} />
-            <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={artW} height={artH} radius={tall ? 10 : 14} />
+            <ArtGlow src={smallSrc} playing={cur.playing} />
+            <FlipArt src={smallSrc} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={artW} height={artH} radius={tall || wide ? 10 : 14} />
           </motion.div>
         </motion.div>
         <div

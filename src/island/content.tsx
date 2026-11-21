@@ -1130,7 +1130,7 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
       const v = levels.map((l) => l.get());
       const low = (v[0] + v[1]) / 2;
       avg += (low - avg) * 0.04;
-      const kick = Math.max(0, low - avg * 0.9) * 3.2;
+      const kick = Math.max(0, low - avg * 0.75) * 4.5;
       energy.set(Math.min(1, kick));
     };
     const offs = levels.map((l) => l.on("change", update));
@@ -1138,8 +1138,8 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
   }, [energy]);
   // Quick to swell, a softer fall back.
   const e = useSpring(energy, { stiffness: 320, damping: 26, mass: 0.5 });
-  const scale = useTransform(e, (v) => 1.0 + v * 0.12);
-  const opacity = useTransform(e, (v) => 0.12 + v * 0.8);
+  const scale = useTransform(e, (v) => 1.02 + v * 0.12);
+  const opacity = useTransform(e, (v) => 0.32 + v * 0.68);
   if (!src) return null;
   return (
     <motion.span

@@ -91,7 +91,7 @@ function makeBlurred(src: string, kind: "fill" | "glow" | "soft", done: () => vo
       const c = document.createElement("canvas");
       c.width = c.height = n;
       const ctx = c.getContext("2d")!;
-      ctx.filter = kind === "fill" ? "blur(3px) saturate(1.6)" : kind === "soft" ? "blur(6px) saturate(1.6)" : "blur(4px) saturate(1.7)";
+      ctx.filter = kind === "fill" ? "blur(3px) saturate(1.6)" : kind === "soft" ? "blur(6px) saturate(1.6)" : "blur(4px) saturate(1.9) brightness(1.25)";
       if (kind === "fill") ctx.drawImage(img, -6, -6, n + 12, n + 12); // past the edges: no dark rim
       else if (kind === "soft") ctx.drawImage(img, 18, 18, n - 36, n - 36); // ≥ 12 px of nothing around it
       else ctx.drawImage(img, 12, 12, n - 24, n - 24); // ~8 px of nothing around the blur

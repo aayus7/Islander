@@ -175,34 +175,90 @@ fn data_url(bytes: &[u8]) -> String {
 // - music: Apple's iTunes Search, then Deezer (both asked at once), 500–600 px. Only a
 //   result whose artist AND title agree with what's playing is used: a sharp wrong cover
 //   (a live version, a cover band) is worse than a soft right one.
-// Free services, no key; only the artist and title are sent. Results (misses too) are
-// remembered for the session.
+// Free services, no key; only the artist and title are sent. Covers are kept on disk
+// (Islander's cache folder, newest 400): by track, and by album, so the next song from the
+// same album shows its cover instantly, and songs played before do too after a restart.
+// Misses are remembered for the session only.
 
 static ART_CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
 
 #[tauri::command]
-pub async fn hires_art(artist: String, title: String, album: String, imdb: Option<String>) -> Option<String> {
+pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, album: String, imdb: Option<String>) -> Option<String> {
     let key = format!("{}|{}|{}|{:?}", artist.to_lowercase(), title.to_lowercase(), album.to_lowercase(), imdb);
     let hit = { ART_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).get(&key).cloned() };
     if let Some(hit) = hit {
         return hit;
     }
+    let dir = {
+        use tauri::Manager;
+        app.path().app_cache_dir().ok().map(|d| d.join("covers"))
+    };
     let found = tauri::async_runtime::spawn_blocking(move || {
-        if let Some(id) = imdb.filter(|i| i.starts_with("tt")) {
-            // IMDb's own poster at 1000 px wide; MetaHub's large poster if that fails.
-            return imdb_poster(&id).or_else(|| {
-                http_get(&format!("https://images.metahub.space/poster/large/{id}/img"))
-                    .filter(|b| b.len() > 2048)
-                    .map(|b| data_url(&b))
-            });
+        // On disk: this exact track, this movie, or (music) any track of the same album.
+        let mut keys = vec![];
+        match imdb.as_deref().filter(|i| i.starts_with("tt")) {
+            Some(id) => keys.push(format!("imdb|{id}")),
+            None => {
+                keys.push(format!("track|{}|{}", main_artist(&artist), core_title(&title)));
+                if !core_title(&album).is_empty() {
+                    keys.push(format!("album|{}|{}", main_artist(&artist), core_title(&album)));
+                }
+            }
         }
-        music_art(&artist, &title, &album)
+        if let Some(d) = &dir {
+            for k in &keys {
+                if let Ok(b) = std::fs::read(d.join(file_for(k))) {
+                    if b.len() > 2048 {
+                        // Found by album: remember it for this track too.
+                        let _ = std::fs::write(d.join(file_for(&keys[0])), &b);
+                        return Some(data_url(&b));
+                    }
+                }
+            }
+        }
+        let bytes = match imdb.as_deref().filter(|i| i.starts_with("tt")) {
+            // IMDb's own poster at 1000 px wide; MetaHub's large poster if that fails.
+            Some(id) => imdb_poster(id).or_else(|| http_get(&format!("https://images.metahub.space/poster/large/{id}/img")).filter(|b| b.len() > 2048)),
+            None => music_art(&artist, &title, &album),
+        }?;
+        if let Some(d) = &dir {
+            let _ = std::fs::create_dir_all(d);
+            for k in &keys {
+                let _ = std::fs::write(d.join(file_for(k)), &bytes);
+            }
+            prune(d);
+        }
+        Some(data_url(&bytes))
     })
     .await
     .ok()
     .flatten();
     ART_CACHE.lock().unwrap().get_or_insert_with(HashMap::new).insert(key, found.clone());
     found
+}
+
+/// File name for a cache key (64-bit FNV-1a: stable across builds, unlike Rust's hasher).
+fn file_for(key: &str) -> String {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in key.bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    format!("{h:016x}.img")
+}
+
+/// Keep the cover cache to the 400 most recently written files (~100 MB at most).
+fn prune(dir: &std::path::Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> =
+        rd.flatten().filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path()))).collect();
+    if files.len() <= 400 {
+        return;
+    }
+    files.sort_by_key(|f| f.0);
+    for (_, p) in files.iter().take(files.len() - 400) {
+        let _ = std::fs::remove_file(p);
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -225,7 +281,7 @@ struct ImdbImage {
 /// The title's poster from IMDb's image server, 1000 px wide. IMDb's search suggestions
 /// (free, no key; what imdb.com's own search box uses) give the original image, and its
 /// URL takes a size: "…_V1_.jpg" → "…_V1_UX1000_.jpg".
-fn imdb_poster(id: &str) -> Option<String> {
+fn imdb_poster(id: &str) -> Option<Vec<u8>> {
     let body = http_get(&format!("https://v3.sg.media-imdb.com/suggestion/t/{id}.json"))?;
     let hit = serde_json::from_slice::<ImdbSuggest>(&body).ok()?.d.into_iter().find(|h| h.id == id)?;
     let url = hit.i?.url;
@@ -236,7 +292,7 @@ fn imdb_poster(id: &str) -> Option<String> {
         Some(i) => format!("{}._V1_UX1000_.jpg", &url[..i]),
         None => url,
     };
-    http_get(&sized).filter(|b| b.len() > 4096).map(|b| data_url(&b))
+    http_get(&sized).filter(|b| b.len() > 4096)
 }
 
 /// Title without the parts stores spell differently: "(feat. X)", "- Remastered 2011",
@@ -316,12 +372,12 @@ struct DeezerName {
 struct DeezerAlbum {
     #[serde(default)]
     title: String,
-    /// 500 px.
+    /// 1000 px.
     #[serde(default)]
-    cover_big: String,
+    cover_xl: String,
 }
 
-fn music_art(artist: &str, title: &str, album: &str) -> Option<String> {
+fn music_art(artist: &str, title: &str, album: &str) -> Option<Vec<u8>> {
     let (want_a, want_t, want_al) = (main_artist(artist), core_title(title), core_title(album));
     if want_a.is_empty() || want_t.is_empty() {
         return None;
@@ -341,22 +397,23 @@ fn music_art(artist: &str, title: &str, album: &str) -> Option<String> {
                 r.data
                     .into_iter()
                     .map(|h| {
-                        let (al, cover) = h.album.map(|a| (a.title, a.cover_big)).unwrap_or_default();
+                        let (al, cover) = h.album.map(|a| (a.title, a.cover_xl)).unwrap_or_default();
                         (h.artist.map(|a| a.name).unwrap_or_default(), h.title, al, cover)
                     })
                     .collect::<Vec<_>>()
             })
     });
     let term = format!("{} {}", artist, title);
-    // 600 px: sharp at the card's size even on high-DPI screens, and quick to download.
+    // 1200 px: sharp on any screen. (Covers are remembered on disk and per album, so most
+    // track changes don't wait for this at all.)
     let itunes = http_get(&format!("https://itunes.apple.com/search?media=music&entity=song&limit=15&term={}", encode(&term)))
         .and_then(|b| serde_json::from_slice::<ItunesResp>(&b).ok())
-        .and_then(|r| pick(r.results.into_iter().map(|h| (h.artist, h.track, h.album, h.art.replace("100x100bb", "600x600bb"))).collect()));
+        .and_then(|r| pick(r.results.into_iter().map(|h| (h.artist, h.track, h.album, h.art.replace("100x100bb", "1200x1200bb"))).collect()));
     let url = match itunes {
         Some(u) => u,
         None => pick(deezer.join().ok().flatten()?)?,
     };
-    http_get(&url).filter(|b| b.len() > 2048).map(|b| data_url(&b))
+    http_get(&url).filter(|b| b.len() > 2048)
 }
 
 fn encode(s: &str) -> String {

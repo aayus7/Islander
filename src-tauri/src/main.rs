@@ -4,6 +4,7 @@
 mod audio;
 mod battery;
 mod clipboard;
+mod crashlog;
 mod dlmgr;
 mod posters;
 mod updater;
@@ -320,18 +321,9 @@ fn main() {
         takeover::restore_from_backup_file();
         return;
     }
-    // If anything ever crashes, leave a note explaining why (next to settings.json).
-    std::panic::set_hook(Box::new(|info| {
-        let msg = format!("[{:?}] island crashed: {info}\n", std::time::SystemTime::now());
-        eprintln!("{msg}");
-        if let Some(dir) = std::env::var_os("APPDATA").map(|d| std::path::PathBuf::from(d).join("dev.island.desktop")) {
-            let _ = std::fs::create_dir_all(&dir);
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("crash.log")) {
-                let _ = f.write_all(msg.as_bytes());
-            }
-        }
-    }));
+    // If anything ever crashes, leave a note explaining why (crash.log next to settings.json,
+    // plus a crash dump for Windows-level crashes).
+    crashlog::init();
     let builder = tauri::Builder::default();
     // Release: one Islander at a time. Opening it again (Start menu, desktop shortcut)
     // brings up Settings in the copy that's already running, like any desktop app, and

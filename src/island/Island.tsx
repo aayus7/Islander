@@ -48,14 +48,14 @@ const SMOOTHING = 0.6; // iOS "continuous corner" smoothing
 // content inside an animating width makes text snap between pixels as the spring
 // settles — that was the "twitch" at the end of transitions.)
 const FRAME_W = 460;
-const FRAME_H = 440; // tall enough for the AI panel
+const FRAME_H = 480; // tall enough for the AI panel and the cover card (with its volume row)
 // The island's window (CSS px before the size scale; same as WIN_W/WIN_H in main.rs).
 // The frame sits in its middle; for each dock the whole layer is shifted so the island
 // hugs the matching window edge, and the window hugs that screen edge.
 const WIN_W = 560;
-const WIN_H = 480;
+const WIN_H = 580;
 /** Extra room below the frame for the open island's shadow to fade out. */
-const SHADOW_PAD = WIN_H - 440;
+const SHADOW_PAD = WIN_H - FRAME_H; // also leaves room for the tab dock under the tallest island
 const FRAME_X = (WIN_W - FRAME_W) / 2;
 const EDGE = 8; // gap to the screen edge it's docked on
 const SIDE_M = 14; // inset at the start/end of an edge
@@ -1239,7 +1239,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
                   <motion.div
                     key="media-vol"
                     className="media-vol"
-                    style={{ top: SIZES.media.h + mediaExtra + 2, width: SIZES.media.w }}
+                    style={{ top: SIZES.media.h + mediaExtra + 2, width: mediaW ?? SIZES.media.w }}
                     initial={{ opacity: 0, y: -8, filter: "blur(4px)" }}
                     animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                     exit={{ opacity: 0, y: -6, filter: "blur(3px)", transition: { duration: 0.16 } }}

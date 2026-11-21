@@ -1029,6 +1029,8 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     w = Math.min(w, Math.round((lo.w / dpr) * 1.25));
   }
+  // Never taller than 340 px, so the card with its volume row fits the island's frame.
+  if (w * r > 340) w = Math.round(340 / r);
   w = Math.max(170, w);
   const h = Math.round(w * r);
   const boxW = w + CARD_PAD * 2;

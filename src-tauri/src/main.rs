@@ -111,6 +111,17 @@ async fn media_command(id: String, action: String) -> Result<(), String> {
 /// Is the cursor over the island right now? (The island asks when it loads: the hover
 /// may have started before it was listening, e.g. right after startup.)
 static HOVERING: AtomicBool = AtomicBool::new(false);
+/// The island is hidden for a fullscreen app, but the volume just changed: show it (without
+/// taking focus) until this moment, in ms since the Unix epoch, so the volume pill appears
+/// over the game or video like Windows' own volume pop-up would.
+static HUD_PEEK_UNTIL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+/// Called on every volume / mute change (hud.rs).
+pub(crate) fn hud_peek() {
+    HUD_PEEK_UNTIL.store(now_ms() + 1900, Ordering::Relaxed);
+}
 #[tauri::command]
 fn hover_state() -> bool {
     HOVERING.load(Ordering::Relaxed)
@@ -945,6 +956,8 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
         // A change must be seen twice in a row (~1 s) before acting, so brief focus
         // changes (a toast, a menu, the "Press Esc" bubble) don't make the island blink.
         let mut fs_pending = 0u8;
+        // Showing just the volume pill over a fullscreen app (see HUD_PEEK_UNTIL).
+        let mut peeking = false;
         loop {
             std::thread::sleep(Duration::from_millis(16));
             tick = tick.wrapping_add(1);
@@ -958,6 +971,7 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                         fs_pending = 0;
                         fs_hidden = want;
                         eprintln!("[island] {} [{}]", if want { "hiding: a fullscreen app is in front" } else { "back: fullscreen app closed" }, win::fullscreen_why());
+                        peeking = false;
                         if want {
                             HOVERING.store(false, Ordering::Relaxed);
                             let _ = app.emit("island://hover", false);
@@ -972,6 +986,20 @@ fn spawn_hit_tester(app: AppHandle, state: St) {
                 interactive = false;
                 hovering = false;
                 HOVERING.store(false, Ordering::Relaxed);
+                // Volume keys in fullscreen: flash the volume pill, click-through and without
+                // focus, then tuck the island away again.
+                #[cfg(windows)]
+                if let Some(win) = app.get_webview_window("island") {
+                    let show = now_ms() < HUD_PEEK_UNTIL.load(Ordering::Relaxed);
+                    if show && !peeking {
+                        peeking = true;
+                        let _ = win.set_ignore_cursor_events(true);
+                        win::show_no_activate(&win);
+                    } else if !show && peeking {
+                        peeking = false;
+                        let _ = win.hide();
+                    }
+                }
                 continue;
             }
             if state.hidden.load(Ordering::Relaxed) {

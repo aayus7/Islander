@@ -95,10 +95,12 @@ pub mod imp {
                     // Mute toggled: the Ring/Silent-style pill.
                     last_vol = Some(cur);
                     let _ = app.emit("hud://show", HudEvent { kind: "mute", value: cur.0 as f64, on: cur.1 });
+                    crate::hud_peek();
                 }
                 Some(prev) if (prev.0 - cur.0).abs() > 0.004 => {
                     last_vol = Some(cur);
                     let _ = app.emit("hud://show", HudEvent { kind: "volume", value: cur.0 as f64, on: cur.1 });
+                    crate::hud_peek();
                 }
                 _ => {}
             }

@@ -20,6 +20,19 @@ pub fn apply_overlay_styles(win: &tauri::WebviewWindow) {
     }
 }
 
+/// Show without taking focus and keep it above everything: used to flash the volume pill
+/// over a fullscreen app. A normal show could activate the island and knock a game or video
+/// out of fullscreen.
+pub fn show_no_activate(win: &tauri::WebviewWindow) {
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_SHOWNOACTIVATE};
+    let Ok(h) = win.hwnd() else { return };
+    let hwnd = HWND(h.0 as _);
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+}
+
 /// A popup menu only closes on outside clicks if its owner window is in the foreground.
 pub fn bring_to_foreground(win: &tauri::WebviewWindow) {
     let Ok(h) = win.hwnd() else { return };

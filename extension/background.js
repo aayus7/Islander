@@ -115,9 +115,15 @@ async function loadWide(url, fallback) {
   if (wide.has(url) || url.startsWith("data:")) return;
   wide.set(url, null);
   try {
-    let res = await fetch(url, { credentials: "omit" });
-    if (!res.ok && fallback) res = await fetch(fallback, { credentials: "omit" });
-    if (!res.ok) throw new Error(res.status);
+    // YouTube: not every video has the 1280 px "maxresdefault"; most that don't still have
+    // "hq720" (also 1280x720), which beats falling back to the 320 px one.
+    const tries = [url, url.includes("/maxresdefault.") ? url.replace("/maxresdefault.", "/hq720.") : null, fallback].filter(Boolean);
+    let res = null;
+    for (const u of tries) {
+      res = await fetch(u, { credentials: "omit" });
+      if (res.ok) break;
+    }
+    if (!res || !res.ok) throw new Error("no image");
     const bmp = await createImageBitmap(await res.blob());
     if (bmp.width < bmp.height * 1.2) throw new Error("not wide");
     const s = Math.min(1, 960 / bmp.width);

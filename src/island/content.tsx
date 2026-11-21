@@ -1203,10 +1203,13 @@ function MagnetCover({ w, h, radius, playing, children }: { w: number; h: number
     >
       <motion.div
         className="magnet-tilt"
-        style={{ width: w, height: h, rotateX, rotateY, x, y, borderRadius: radius, boxShadow: shadow }}
+        style={{ width: w, height: h, rotateX, rotateY, x, y, borderRadius: radius }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
       >
+        {/* Its own layer: above the glow (which would otherwise hide it while music
+            plays and the glow is bright), below the cover. */}
+        <motion.span className="magnet-shadow" style={{ borderRadius: radius, boxShadow: shadow }} />
         {children}
         <motion.span className="magnet-shine" style={{ backgroundImage: glare, opacity: shine, borderRadius: radius }} />
       </motion.div>

@@ -113,6 +113,7 @@ button { font: inherit; color: inherit; }
 @keyframes lb-c { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .living-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.5)); }
 .magnet-tilt { position: relative; transform-style: preserve-3d; will-change: transform; }
+.magnet-shadow { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .magnet-shine { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; z-index: 2; }
 .card-glow { position: absolute; inset: -42%; z-index: -1; pointer-events: none; background-size: 100% 100%; background-position: center; will-change: transform, opacity; } /* pre-blurred: no live filter */
 .cover-big .art-glow { transform: scale(1.08); }

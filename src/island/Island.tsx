@@ -48,12 +48,12 @@ const SMOOTHING = 0.6; // iOS "continuous corner" smoothing
 // content inside an animating width makes text snap between pixels as the spring
 // settles — that was the "twitch" at the end of transitions.)
 const FRAME_W = 460;
-const FRAME_H = 480; // tall enough for the AI panel and the cover card (with its volume row)
+const FRAME_H = 540; // tall enough for the AI panel and the cover card (with its volume row)
 // The island's window (CSS px before the size scale; same as WIN_W/WIN_H in main.rs).
 // The frame sits in its middle; for each dock the whole layer is shifted so the island
 // hugs the matching window edge, and the window hugs that screen edge.
 const WIN_W = 560;
-const WIN_H = 580;
+const WIN_H = 640;
 /** Extra room below the frame for the open island's shadow to fade out. */
 const SHADOW_PAD = WIN_H - FRAME_H; // also leaves room for the tab dock under the tallest island
 const FRAME_X = (WIN_W - FRAME_W) / 2;

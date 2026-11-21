@@ -185,6 +185,48 @@ export function MediaExpanded({
     onCommand(`seek:${target}`);
   };
 
+  // Previous / play-pause / next (video players: back 10 / forward 10), shared by the
+  // player and the cover card.
+  const transport = (
+    <div className="row" style={{ gap: 16 }}>
+      {skipMode ? (
+        <CtrlButton disabled={!session.canSeek} onClick={() => skipBy(-10)}>
+          <SymbolSwap k={`b10-${session.id}`}>
+            <Skip10Icon dir={-1} size={30} />
+          </SymbolSwap>
+        </CtrlButton>
+      ) : (
+        <CtrlButton disabled={!session.canPrev} onClick={() => { flipDir.current = -1; onCommand("prev"); }}>
+          <SymbolSwap k={`prev-${session.id}`}>
+            <SkipIcon dir={-1} size={30} />
+          </SymbolSwap>
+        </CtrlButton>
+      )}
+      <CtrlButton
+        big
+        onClick={() => {
+          setPending({ id: session.id, at: Date.now(), pos: livePosition(cur, Date.now()), playing: !cur.playing });
+          onCommand("toggle");
+        }}
+      >
+        <SymbolSwap k={`${cur.playing ? "pause" : "play"}-${session.id}`}>{cur.playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}</SymbolSwap>
+      </CtrlButton>
+      {skipMode ? (
+        <CtrlButton disabled={!session.canSeek} onClick={() => skipBy(10)}>
+          <SymbolSwap k={`f10-${session.id}`}>
+            <Skip10Icon dir={1} size={30} />
+          </SymbolSwap>
+        </CtrlButton>
+      ) : (
+        <CtrlButton disabled={!session.canNext} onClick={() => { flipDir.current = 1; onCommand("next"); }}>
+          <SymbolSwap k={`next-${session.id}`}>
+            <SkipIcon dir={1} size={30} />
+          </SymbolSwap>
+        </CtrlButton>
+      )}
+    </div>
+  );
+
   if (big) {
     return (
       <div
@@ -203,22 +245,27 @@ export function MediaExpanded({
           transition={COVER_SPRING}
         >
           <ArtGlow src={session.artwork} playing={cur.playing} />
-          {session.artwork && <img className="cover-lo" src={session.artwork} alt="" draggable={false} style={{ filter: hi.url ? "none" : "blur(3px)" }} />}
-          <AnimatePresence>
-            {hi.url && (
-              <motion.img
-                key={hi.url}
-                className="cover-hi"
-                src={hi.url}
-                alt=""
-                draggable={false}
-                initial={{ opacity: 0, filter: "blur(6px)" }}
-                animate={{ opacity: 1, filter: "blur(0px)" }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-              />
-            )}
-          </AnimatePresence>
-          {!session.artwork && !hi.url && <NoteIcon size={64} />}
+          {/* Turns to the next cover on a track change, like the small one. */}
+          <FlipArt trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={card.w} height={card.h}>
+            <div className="cover-face" style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}>
+              {session.artwork && <img className="cover-lo" src={session.artwork} alt="" draggable={false} style={{ filter: hi.url ? "none" : "blur(3px)" }} />}
+              <AnimatePresence>
+                {hi.url && (
+                  <motion.img
+                    key={hi.url}
+                    className="cover-hi"
+                    src={hi.url}
+                    alt=""
+                    draggable={false}
+                    initial={{ opacity: 0, filter: "blur(6px)" }}
+                    animate={{ opacity: 1, filter: "blur(0px)" }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
+                  />
+                )}
+              </AnimatePresence>
+              {!session.artwork && !hi.url && <NoteIcon size={64} />}
+            </div>
+          </FlipArt>
         </motion.div>
         <motion.div
           className="cover-text"
@@ -232,6 +279,9 @@ export function MediaExpanded({
             <Marquee text={session.artist || session.app} className="subtitle" />
           </motion.div>
         </motion.div>
+        <div className="cover-ctrls" onClick={(e) => e.stopPropagation()}>
+          {transport}
+        </div>
       </div>
     );
   }
@@ -331,43 +381,7 @@ export function MediaExpanded({
       <div className="controls" style={{ marginTop: dur > 0 || session.live ? 10 : 20 }}>
         {/* (video players get ±10 s buttons instead of previous/next) */}
         <SourceIcons sessions={sessions} activeId={session.id} onSelect={onSelect} />
-        <div className="row" style={{ gap: 16 }}>
-          {skipMode ? (
-            <CtrlButton disabled={!session.canSeek} onClick={() => skipBy(-10)}>
-              <SymbolSwap k={`b10-${session.id}`}>
-                <Skip10Icon dir={-1} size={30} />
-              </SymbolSwap>
-            </CtrlButton>
-          ) : (
-            <CtrlButton disabled={!session.canPrev} onClick={() => { flipDir.current = -1; onCommand("prev"); }}>
-              <SymbolSwap k={`prev-${session.id}`}>
-                <SkipIcon dir={-1} size={30} />
-              </SymbolSwap>
-            </CtrlButton>
-          )}
-          <CtrlButton
-            big
-            onClick={() => {
-              setPending({ id: session.id, at: Date.now(), pos: livePosition(cur, Date.now()), playing: !cur.playing });
-              onCommand("toggle");
-            }}
-          >
-            <SymbolSwap k={`${cur.playing ? "pause" : "play"}-${session.id}`}>{cur.playing ? <PauseIcon size={32} /> : <PlayIcon size={32} />}</SymbolSwap>
-          </CtrlButton>
-          {skipMode ? (
-            <CtrlButton disabled={!session.canSeek} onClick={() => skipBy(10)}>
-              <SymbolSwap k={`f10-${session.id}`}>
-                <Skip10Icon dir={1} size={30} />
-              </SymbolSwap>
-            </CtrlButton>
-          ) : (
-            <CtrlButton disabled={!session.canNext} onClick={() => { flipDir.current = 1; onCommand("next"); }}>
-              <SymbolSwap k={`next-${session.id}`}>
-                <SkipIcon dir={1} size={30} />
-              </SymbolSwap>
-            </CtrlButton>
-          )}
-        </div>
+        {transport}
         <div style={{ width: 86, display: "flex", justifyContent: "flex-end" }}>
           <OutputButton kind={deviceKind(current?.name ?? "")} accent={color} active={routesOpen} onClick={() => setRoutesOpen((o) => !o)} />
         </div>
@@ -782,7 +796,7 @@ function Check({ on, color }: { on: boolean; color: string }) {
  * blurring until it's edge-on, then the new cover turns in blurred and sharpens.
  * "Previous" flips the other way.
  */
-function FlipArt({ src, trackKey, dir, size = 64, height, radius = 14 }: { src: string | null; trackKey: string; dir: React.MutableRefObject<number>; size?: number; height?: number; radius?: number }) {
+function FlipArt({ src = null, trackKey, dir, size = 64, height, radius = 14, children }: { src?: string | null; trackKey: string; dir: React.MutableRefObject<number>; size?: number; height?: number; radius?: number; children?: React.ReactNode }) {
   const h = height ?? size;
   const [d, setD] = useState(1);
   const last = useRef(trackKey);
@@ -791,10 +805,12 @@ function FlipArt({ src, trackKey, dir, size = 64, height, radius = 14 }: { src: 
     if (d !== dir.current) setD(dir.current);
     dir.current = 1; // changes not started from our buttons count as "next"
   }
-  // Blur and perspective scale with the cover, so the small pill turns the same way.
+  // Blur and perspective scale with the cover, so the small pill turns the same way
+  // (the blur stops growing past ~2x, or the big card's cover would smear).
   const b = size / 64;
+  const bb = Math.min(b, 2);
   const variants = {
-    enter: (k: number) => ({ rotateY: -90 * k, filter: `blur(${9 * b}px)`, opacity: 1 }),
+    enter: (k: number) => ({ rotateY: -90 * k, filter: `blur(${9 * bb}px)`, opacity: 1 }),
     center: {
       rotateY: 0,
       filter: "blur(0px)",
@@ -805,7 +821,7 @@ function FlipArt({ src, trackKey, dir, size = 64, height, radius = 14 }: { src: 
     },
     exit: (k: number) => ({
       rotateY: 90 * k,
-      filter: `blur(${7 * b}px)`,
+      filter: `blur(${7 * bb}px)`,
       transition: { duration: 0.24, ease: [0.55, 0, 0.85, 0.4] as const },
     }),
   };
@@ -821,7 +837,7 @@ function FlipArt({ src, trackKey, dir, size = 64, height, radius = 14 }: { src: 
           exit="exit"
           style={{ width: size, height: h, transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
         >
-          <Artwork src={src} size={size} height={h} radius={radius} />
+          {children ?? <Artwork src={src} size={size} height={h} radius={radius} />}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -1034,6 +1050,6 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
   w = Math.max(170, w);
   const h = Math.round(w * r);
   const boxW = w + CARD_PAD * 2;
-  const total = CARD_PAD + h + 14 + 44 + 22; // top gap, cover, gap, title + artist, bottom
+  const total = CARD_PAD + h + 14 + 44 + 6 + 46 + 18; // top gap, cover, gap, title + artist, gap, controls, bottom
   return { w, h, boxW, extra: Math.max(0, total - base) };
 }

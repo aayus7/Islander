@@ -4,11 +4,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 
 /* ---------- Artwork ---------- */
 
-export function Artwork({ src, size, radius, style }: { src: string | null; size: number; radius: number; style?: CSSProperties }) {
+export function Artwork({ src, size, height, radius, style }: { src: string | null; size: number; height?: number; radius: number; style?: CSSProperties }) {
   return (
     <div
       className="artwork"
-      style={{ width: size, height: size, borderRadius: radius, ...style }}
+      style={{ width: size, height: height ?? size, borderRadius: radius, ...style }}
     >
       {src ? (
         <img src={src} alt="" draggable={false} />
@@ -17,6 +17,35 @@ export function Artwork({ src, size, radius, style }: { src: string | null; size
       )}
     </div>
   );
+}
+
+/* ---------- Artwork shape ---------- */
+
+const aspects = new Map<string, number>(); // src → height / width
+
+/**
+ * Height ÷ width of an image (1 until it has loaded). Lets tall artwork — movie posters —
+ * be shown whole at its own shape instead of cropped into a square.
+ */
+export function useArtAspect(src: string | null): number {
+  const [r, setR] = useState(() => (src && aspects.get(src)) || 1);
+  useEffect(() => {
+    if (!src) return setR(1);
+    const hit = aspects.get(src);
+    if (hit) return setR(hit);
+    let alive = true;
+    const img = new Image();
+    img.onload = () => {
+      const v = img.naturalWidth > 0 ? img.naturalHeight / img.naturalWidth : 1;
+      aspects.set(src, v);
+      if (alive) setR(v);
+    };
+    img.src = src;
+    return () => {
+      alive = false;
+    };
+  }, [src]);
+  return r;
 }
 
 /* ---------- Waveform: driven by what the PC is actually playing ---------- */

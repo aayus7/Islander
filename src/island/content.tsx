@@ -4,7 +4,7 @@ import { bridge, type MediaAction, type MediaSession, type OutputDevice } from "
 import { fmtTime, livePosition, useArtColor, useNow } from "../lib/hooks";
 import { useSettings } from "../lib/settings";
 import { NumericText } from "./modules/ui";
-import { Artwork, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, PauseIcon, PlayIcon, SkipIcon, Waveform } from "./parts";
+import { Artwork, useArtAspect, gradientStops, readableOn, visibleOnBlack, Marquee, NoteIcon, PauseIcon, PlayIcon, SkipIcon, Waveform } from "./parts";
 
 /* ---------- Compact: art on the left, waveform on the right ---------- */
 
@@ -67,9 +67,16 @@ export function MediaExpanded({
   const current = devices.find((d) => d.isDefault);
   // margin + header + rows + card padding (must match .outputs CSS)
   const listH = routesOpen ? 12 + 26 + Math.max(1, devices.length) * OUT_ROW_H + 6 : 0;
+  // Tall artwork (movie posters, 2:3) is shown whole at its own shape, and the island grows
+  // to fit it, instead of being cropped to a square. Square art keeps the 64×64 cover.
+  const ratio = useArtAspect(session?.artwork ?? null);
+  const tall = ratio > 1.15;
+  const artH = tall ? Math.min(Math.round(64 * ratio), 104) : 64;
+  const artW = tall ? Math.round(artH / ratio) : 64;
+  const artExtra = artH - 64;
   useEffect(() => {
-    onExtraHeight?.(listH);
-  }, [listH, onExtraHeight]);
+    onExtraHeight?.(listH + artExtra);
+  }, [listH, artExtra, onExtraHeight]);
   useEffect(() => () => onExtraHeight?.(0), [onExtraHeight]);
 
   // Optimistic UI: show the result of a seek / play-pause instantly, then hand back to
@@ -118,12 +125,12 @@ export function MediaExpanded({
 
   return (
     <div className="media-x" style={{ width, minHeight: height }}>
-      <div className="row" style={{ gap: 14, height: 64 }}>
+      <div className="row" style={{ gap: 14, height: artH }}>
         {/* Like iOS Music: the cover eases back a touch when paused, springs forward on play. */}
         <motion.div
           className="open-src"
           title={`Open ${session.app}`}
-          style={{ position: "relative", width: 64, height: 64, flexShrink: 0, isolation: "isolate" }}
+          style={{ position: "relative", width: 64, height: artH, flexShrink: 0, isolation: "isolate", display: "flex", justifyContent: "center" }}
           initial={false}
           animate={{ scale: cur.playing ? 1 : 0.93 }}
           whileTap={{ scale: cur.playing ? 0.94 : 0.88 }}
@@ -134,7 +141,7 @@ export function MediaExpanded({
           }}
         >
           <ArtGlow src={session.artwork} playing={cur.playing} />
-          <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} />
+          <FlipArt src={session.artwork} trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={artW} height={artH} radius={tall ? 10 : 14} />
         </motion.div>
         <div
           className="col open-src"
@@ -644,7 +651,8 @@ function Check({ on, color }: { on: boolean; color: string }) {
  * blurring until it's edge-on, then the new cover turns in blurred and sharpens.
  * "Previous" flips the other way.
  */
-function FlipArt({ src, trackKey, dir, size = 64, radius = 14 }: { src: string | null; trackKey: string; dir: React.MutableRefObject<number>; size?: number; radius?: number }) {
+function FlipArt({ src, trackKey, dir, size = 64, height, radius = 14 }: { src: string | null; trackKey: string; dir: React.MutableRefObject<number>; size?: number; height?: number; radius?: number }) {
+  const h = height ?? size;
   const [d, setD] = useState(1);
   const last = useRef(trackKey);
   if (last.current !== trackKey) {
@@ -671,7 +679,7 @@ function FlipArt({ src, trackKey, dir, size = 64, radius = 14 }: { src: string |
     }),
   };
   return (
-    <div style={{ position: "relative", width: size, height: size, perspective: 420 * b }}>
+    <div style={{ position: "relative", width: size, height: h, perspective: 420 * b }}>
       <AnimatePresence initial={false} mode="wait" custom={d}>
         <motion.div
           key={trackKey}
@@ -680,9 +688,9 @@ function FlipArt({ src, trackKey, dir, size = 64, radius = 14 }: { src: string |
           initial="enter"
           animate="center"
           exit="exit"
-          style={{ width: size, height: size, transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
+          style={{ width: size, height: h, transformStyle: "preserve-3d", backfaceVisibility: "hidden" }}
         >
-          <Artwork src={src} size={size} radius={radius} />
+          <Artwork src={src} size={size} height={h} radius={radius} />
         </motion.div>
       </AnimatePresence>
     </div>

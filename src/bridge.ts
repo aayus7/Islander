@@ -31,7 +31,7 @@ export interface MediaSession {
   /** IMDb id when this is a movie/episode we matched (set by the poster lookup). */
   imdb?: string;
   /** Where the data came from: Windows' media API or the browser extension. */
-  source?: "windows" | "extension";
+  source?: "windows" | "extension" | "window";
   /** Live stream: show the LIVE bar instead of timestamps. */
   live?: boolean;
 }

@@ -400,8 +400,121 @@ mod imp {
             w.art.clear();
             w.misses.clear();
         }
+        sessions.extend(window_sessions());
         let sessions = merge_extension(sessions);
         Ok(MediaState { sessions, current_id })
+    }
+
+    /* ---- players that don't tell Windows what they're playing (VLC, Stremio) ----
+     * Seen through their window title ("Interstellar.2014.1080p.mkv - VLC media player"),
+     * playing while the app makes sound. No timeline; play/pause and next/previous go to
+     * the window as media-key commands (WM_APPCOMMAND), which VLC acts on. The title is
+     * enough for the movie poster lookup. */
+
+    /// (exe stem, app name shown, title suffix/prefix to strip, bare title = nothing playing)
+    const TITLE_PLAYERS: &[(&str, &str, &str, &str)] = &[
+        ("vlc", "VLC", " - VLC media player", "VLC media player"),
+        ("stremio", "Stremio", " - Stremio", "Stremio"),
+        ("stremio-shell-ng", "Stremio", " - Stremio", "Stremio"),
+    ];
+
+    /// Visible top-level windows of the title players: (stem, hwnd, title).
+    fn player_windows() -> Vec<(String, isize, String)> {
+        use windows::Win32::Foundation::{HWND, LPARAM};
+        use windows::core::BOOL;
+        use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, GW_OWNER};
+        unsafe extern "system" fn each(h: HWND, l: LPARAM) -> BOOL {
+            let out = unsafe { &mut *(l.0 as *mut Vec<(u32, isize, String)>) };
+            unsafe {
+                if !IsWindowVisible(h).as_bool() || GetWindow(h, GW_OWNER).map(|o| !o.0.is_null()).unwrap_or(false) {
+                    return BOOL(1);
+                }
+                let mut buf = [0u16; 512];
+                let n = GetWindowTextW(h, &mut buf);
+                if n <= 0 {
+                    return BOOL(1);
+                }
+                let mut pid = 0u32;
+                GetWindowThreadProcessId(h, Some(&mut pid as *mut u32));
+                out.push((pid, h.0 as isize, String::from_utf16_lossy(&buf[..n as usize])));
+            }
+            BOOL(1)
+        }
+        let mut all: Vec<(u32, isize, String)> = Vec::new();
+        unsafe {
+            let _ = EnumWindows(Some(each), LPARAM(&mut all as *mut _ as isize));
+        }
+        let mut stems: HashMap<u32, String> = HashMap::new();
+        all.into_iter()
+            .filter_map(|(pid, h, t)| {
+                let stem = stems.entry(pid).or_insert_with(|| crate::audio::meters::exe_stem(pid).0).clone();
+                TITLE_PLAYERS.iter().any(|p| p.0 == stem).then_some((stem, h, t))
+            })
+            .collect()
+    }
+
+    fn window_sessions() -> Vec<MediaSession> {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64() * 1000.0).unwrap_or(0.0);
+        let mut out: Vec<MediaSession> = Vec::new();
+        for (stem, _h, raw) in player_windows() {
+            let Some(&(_, app, cut, bare)) = TITLE_PLAYERS.iter().find(|p| p.0 == stem) else { continue };
+            let t = raw.trim();
+            if t.is_empty() || t.eq_ignore_ascii_case(bare) {
+                continue; // nothing open
+            }
+            let title = t.strip_suffix(cut).or_else(|| t.strip_prefix(&format!("{bare} - "))).unwrap_or(t).trim().to_string();
+            if title.is_empty() || out.iter().any(|s| s.id == format!("window:{stem}")) {
+                continue;
+            }
+            // Only while it's in use: made sound in the last half hour.
+            let heard = crate::audio::meters::silent_ms(&stem);
+            if heard.map_or(true, |ms| ms > 30.0 * 60_000.0) {
+                continue;
+            }
+            let playing = crate::audio::meters::audible(&stem);
+            out.push(MediaSession {
+                id: format!("window:{stem}"),
+                app: app.into(),
+                title,
+                artist: String::new(),
+                album: String::new(),
+                artwork: None,
+                artwork_wide: None,
+                icon: exe_icon(&stem),
+                playing,
+                position: 0.0,
+                duration: 0.0,
+                sampled_at: now,
+                can_next: stem == "vlc",
+                can_prev: stem == "vlc",
+                can_seek: false,
+                audible: playing,
+                rate: 1.0,
+                source: "window".into(),
+                live: false,
+            });
+        }
+        out
+    }
+
+    /// Play/pause, next, previous for a title player: a media-key command to its window.
+    fn window_command(stem: &str, action: &str) -> Result<(), String> {
+        use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+        use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APPCOMMAND};
+        let cmd: isize = match action {
+            "toggle" => 14, // APPCOMMAND_MEDIA_PLAY_PAUSE
+            "next" => 11,   // APPCOMMAND_MEDIA_NEXTTRACK
+            "prev" => 12,   // APPCOMMAND_MEDIA_PREVIOUSTRACK
+            _ => return Ok(()),
+        };
+        let Some((_, h, _)) = player_windows().into_iter().find(|(s, _, t)| s == stem && !t.trim().is_empty()) else {
+            return Err("player window not found".into());
+        };
+        let hwnd = HWND(h as _);
+        unsafe { PostMessageW(Some(hwnd), WM_APPCOMMAND, WPARAM(h as usize), LPARAM(cmd << 16)) }.map_err(|e| e.to_string())?;
+        mark_dirty();
+        request_refresh();
+        Ok(())
     }
 
     fn read_session(s: &Session, id: String, w: &mut Watcher) -> WinResult<MediaSession> {
@@ -817,7 +930,7 @@ mod imp {
                 crate::win::focus_app(browser_exe(browser));
                 return Ok(());
             }
-            let stem = exe_for_id(id);
+            let stem = id.strip_prefix("window:").map(str::to_string).unwrap_or_else(|| exe_for_id(id));
             if !crate::win::focus_app(&stem) {
                 // Store apps: activate by their AppUserModelId.
                 crate::system::activate_app(id)?;
@@ -827,6 +940,9 @@ mod imp {
         if let Some(r) = ext_command(id, action) {
             mark_dirty();
             return r;
+        }
+        if let Some(stem) = id.strip_prefix("window:") {
+            return window_command(stem, action);
         }
         let run = || -> WinResult<()> {
             let m = command_manager()?;

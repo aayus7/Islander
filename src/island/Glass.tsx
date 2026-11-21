@@ -166,6 +166,33 @@ interface Props {
   tintBottom: number;
 }
 
+/**
+ * Build the glass shader once ahead of time, on a throwaway canvas, a moment after start-up.
+ * The graphics driver keeps the compiled result, so the first time Search or Ask opens the
+ * glass is ready on its first frame instead of stalling while the shader compiles.
+ */
+let warmed = false;
+export function warmGlass() {
+  if (warmed || !bridge.isNative) return;
+  warmed = true;
+  try {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 2;
+    const gl = cv.getContext("webgl2", { premultipliedAlpha: true, antialias: false, alpha: false });
+    if (!gl) return;
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.finish();
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+  } catch {
+    /* nothing to warm: the panel still works, just compiles on first open */
+  }
+}
+
 export function LiquidGlass({ width, height, radius, clearFrom, maxHeight, tintTop, tintBottom }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const props = useRef({ width, clearFrom, tintTop, tintBottom });

@@ -49,10 +49,18 @@ mod imp {
         *RECT.lock().unwrap() = (x, y, w, h);
         GEN.fetch_add(1, Ordering::SeqCst);
         RUNNING.store(true, Ordering::SeqCst);
-        // One worker for the app's whole life. It owns the magnifier and pauses between opens.
-        // (A new worker per open meant an old one could still be switching the magnifier off
-        // while the new one used it — Windows then kills the app with 0xc000041d.)
-        static WORKER: std::sync::Once = std::sync::Once::new();
+        warm(app);
+    }
+
+    // One worker for the app's whole life. It owns the magnifier and pauses between opens.
+    // (A new worker per open meant an old one could still be switching the magnifier off
+    // while the new one used it — Windows then kills the app with 0xc000041d.)
+    static WORKER: std::sync::Once = std::sync::Once::new();
+
+    /// Set the capture up ahead of time (called shortly after start-up), so the first time
+    /// Search or Ask opens its glass is there as quickly as every later time, instead of
+    /// waiting for the magnifier to be created then.
+    pub fn warm(app: AppHandle) {
         WORKER.call_once(move || {
             std::thread::spawn(move || worker(app));
         });
@@ -65,7 +73,8 @@ mod imp {
         let mut shown = false;
         loop {
             if !RUNNING.load(Ordering::SeqCst) {
-                std::thread::sleep(Duration::from_millis(15));
+                // Waiting for Search or Ask to open (checked often enough to start at once).
+                std::thread::sleep(Duration::from_millis(20));
                 continue;
             }
             let gen = GEN.load(Ordering::SeqCst);
@@ -423,6 +432,7 @@ mod imp {
     pub fn start(_app: AppHandle, _x: f64, _y: f64, _w: f64, _h: f64) {}
     pub fn update(_x: f64, _y: f64, _w: f64, _h: f64) {}
     pub fn stop(_app: &AppHandle) {}
+    pub fn warm(_app: AppHandle) {}
 }
 
-pub use imp::{start, stop, update};
+pub use imp::{start, stop, update, warm};

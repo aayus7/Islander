@@ -504,6 +504,15 @@ fn main() {
             media::spawn(app.handle().clone());
             audio::spawn(app.handle().clone());
             audio::meters::spawn(media::mark_dirty);
+            // Get Search or Ask's glass capture ready in the background a few seconds after
+            // start-up, so even its first opening shows the finished glass straight away.
+            if s.ai_glass {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(3));
+                    glass::warm(h);
+                });
+            }
             takeover::KEYS.store(s.hud && s.takeover, Ordering::Relaxed);
             takeover::install_exit_guard();
             takeover::spawn_keys();

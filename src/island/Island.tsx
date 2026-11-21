@@ -34,7 +34,7 @@ import { recActive, useScreenRec } from "../lib/screenrec";
 import { SIDE, MediaCompactV, ClockCompactV, DownloadCompactV, HudV, RecCompactV } from "./SidePill";
 import type { Dock, DockAlong } from "../settings-types";
 import { pinsPageOpen } from "./modules/Controls";
-import { clearGlassFrames, LiquidGlass } from "./Glass";
+import { clearGlassFrames, LiquidGlass, warmGlass } from "./Glass";
 
 /* ---------------- Geometry ---------------- */
 
@@ -922,6 +922,13 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     }, 6000);
     return () => clearTimeout(t);
   }, [settings.moveTipShown]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ready Search or Ask's glass ahead of its first opening (see warmGlass).
+  useEffect(() => {
+    if (!settings.aiGlass) return;
+    const t = window.setTimeout(() => warmGlass(), 2500);
+    return () => clearTimeout(t);
+  }, [settings.aiGlass]);
 
   // Paused while the island is being moved: capturing a moving area gives black frames.
   const glassOn = mode === "ai" && settings.aiGlass && !lifted;

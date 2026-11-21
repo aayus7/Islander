@@ -299,6 +299,8 @@ export function MediaExpanded({
           back();
         }}
       >
+        {/* Apple Music's full-screen look: the island filled with the cover's colours. */}
+        <LivingBg src={(wideArt ? null : hi.url) ?? cardLo} />
         <motion.div
           ref={coverEl}
           className="cover-big"
@@ -1207,5 +1209,35 @@ function MagnetCover({ w, h, radius, playing, children }: { w: number; h: number
         <motion.span className="magnet-shine" style={{ backgroundImage: glare, opacity: shine, borderRadius: radius }} />
       </motion.div>
     </motion.div>
+  );
+}
+
+/**
+ * Behind the cover card: blurred copies of the cover drifting slowly, so the island glows
+ * in the cover's colours (Apple Music's full-screen player), with a dark wash keeping the
+ * text readable. Crossfades to the new colours on a track change. GPU-only (transforms on
+ * blurred layers), and only while the card is open.
+ */
+function LivingBg({ src }: { src: string | null }) {
+  return (
+    <div className="living-bg" aria-hidden>
+      <AnimatePresence initial={false}>
+        {src && (
+          <motion.div
+            key={src}
+            className="living-layers"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.1, ease: "easeInOut" }}
+          >
+            <span className="lb lb1" style={{ backgroundImage: `url("${src}")` }} />
+            <span className="lb lb2" style={{ backgroundImage: `url("${src}")` }} />
+            <span className="lb lb3" style={{ backgroundImage: `url("${src}")` }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <span className="living-shade" />
+    </div>
   );
 }

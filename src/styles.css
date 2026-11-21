@@ -95,10 +95,22 @@ button { font: inherit; color: inherit; }
 /* ---------- expanded media ---------- */
 .media-x { box-sizing: border-box; padding: 20px 22px 0; display: flex; flex-direction: column; }
 /* Cover card: the cover grown to fill the player (click to go back). */
-.cover-card { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; cursor: pointer; }
+.cover-card { position: relative; isolation: isolate; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14px; cursor: pointer; }
 .cover-big { position: relative; flex-shrink: 0; isolation: isolate; display: flex; align-items: center; justify-content: center; }
 .cover-big .art-glow-wrap { z-index: -1; }
 .magnet { position: relative; perspective: 900px; }
+/* Living background behind the cover card */
+.cover-card > :not(.living-bg) { position: relative; z-index: 1; }
+.living-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.living-layers { position: absolute; inset: 0; }
+.lb { position: absolute; width: 130%; height: 130%; background-size: cover; background-position: center; filter: blur(48px) saturate(1.6); will-change: transform; }
+.lb1 { left: -35%; top: -35%; animation: lb-a 26s ease-in-out infinite alternate; }
+.lb2 { right: -35%; bottom: -35%; transform: rotate(180deg); animation: lb-b 32s ease-in-out infinite alternate; }
+.lb3 { left: 5%; top: 15%; width: 95%; height: 95%; opacity: 0.75; animation: lb-c 40s linear infinite; }
+@keyframes lb-a { from { transform: translate(0, 0) rotate(0deg) scale(1); } to { transform: translate(14%, 10%) rotate(40deg) scale(1.15); } }
+@keyframes lb-b { from { transform: rotate(180deg) translate(0, 0) scale(1.1); } to { transform: rotate(230deg) translate(12%, -8%) scale(0.95); } }
+@keyframes lb-c { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.living-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.5)); }
 .magnet-tilt { position: relative; transform-style: preserve-3d; will-change: transform; }
 .magnet-shine { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; z-index: 2; }
 .card-glow { position: absolute; inset: 0; z-index: -1; pointer-events: none; background-size: cover; background-position: center; filter: blur(22px) saturate(1.7); will-change: transform, opacity; }

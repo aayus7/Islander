@@ -171,7 +171,7 @@ fn data_url(bytes: &[u8]) -> String {
 //
 // Windows hands media apps' covers over small (Spotify: ~300 px), which looks soft when
 // the cover grows into the big card. This finds the same cover at full size:
-// - a movie/episode (IMDb id): IMDb's own poster at 1000 px (MetaHub's large one if not);
+// - a movie/episode (IMDb id): IMDb's own poster at ART_PX wide (MetaHub's large one if not);
 // - music: Apple's iTunes Search, then Deezer (both asked at once), 500–600 px. Only a
 //   result whose artist AND title agree with what's playing is used: a sharp wrong cover
 //   (a live version, a cover band) is worse than a soft right one.
@@ -182,6 +182,9 @@ fn data_url(bytes: &[u8]) -> String {
 
 static ART_CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
 
+/// Size of the large covers and posters (longest side for covers, width for posters).
+const ART_PX: u32 = 800;
+
 #[tauri::command]
 pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, album: String, imdb: Option<String>) -> Option<String> {
     let key = format!("{}|{}|{}|{:?}", artist.to_lowercase(), title.to_lowercase(), album.to_lowercase(), imdb);
@@ -191,7 +194,11 @@ pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, alb
     }
     let dir = {
         use tauri::Manager;
-        app.path().app_cache_dir().ok().map(|d| d.join("covers"))
+        app.path().app_cache_dir().ok().map(|d| {
+            // Covers saved at another size are dropped (one folder per size).
+            let _ = std::fs::remove_dir_all(d.join("covers"));
+            d.join(format!("covers-{ART_PX}"))
+        })
     };
     let found = tauri::async_runtime::spawn_blocking(move || {
         // On disk: this exact track, this movie, or (music) any track of the same album.
@@ -217,7 +224,7 @@ pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, alb
             }
         }
         let bytes = match imdb.as_deref().filter(|i| i.starts_with("tt")) {
-            // IMDb's own poster at 1000 px wide; MetaHub's large poster if that fails.
+            // IMDb's own poster at ART_PX wide; MetaHub's large poster if that fails.
             Some(id) => imdb_poster(id).or_else(|| http_get(&format!("https://images.metahub.space/poster/large/{id}/img")).filter(|b| b.len() > 2048)),
             None => music_art(&artist, &title, &album),
         }?;
@@ -278,9 +285,9 @@ struct ImdbImage {
     url: String,
 }
 
-/// The title's poster from IMDb's image server, 1000 px wide. IMDb's search suggestions
+/// The title's poster from IMDb's image server, ART_PX wide. IMDb's search suggestions
 /// (free, no key; what imdb.com's own search box uses) give the original image, and its
-/// URL takes a size: "…_V1_.jpg" → "…_V1_UX1000_.jpg".
+/// URL takes a size: "…_V1_.jpg" → "…_V1_UX800_.jpg".
 fn imdb_poster(id: &str) -> Option<Vec<u8>> {
     let body = http_get(&format!("https://v3.sg.media-imdb.com/suggestion/t/{id}.json"))?;
     let hit = serde_json::from_slice::<ImdbSuggest>(&body).ok()?.d.into_iter().find(|h| h.id == id)?;
@@ -289,7 +296,7 @@ fn imdb_poster(id: &str) -> Option<Vec<u8>> {
         return None;
     }
     let sized = match url.rfind("._V1_") {
-        Some(i) => format!("{}._V1_UX1000_.jpg", &url[..i]),
+        Some(i) => format!("{}._V1_UX{ART_PX}_.jpg", &url[..i]),
         None => url,
     };
     http_get(&sized).filter(|b| b.len() > 4096)
@@ -397,18 +404,19 @@ fn music_art(artist: &str, title: &str, album: &str) -> Option<Vec<u8>> {
                 r.data
                     .into_iter()
                     .map(|h| {
-                        let (al, cover) = h.album.map(|a| (a.title, a.cover_xl)).unwrap_or_default();
+                        // cover_xl is 1000 px; its URL takes any size ("…/1000x1000-…").
+                        let (al, cover) = h.album.map(|a| (a.title, a.cover_xl.replace("1000x1000", &format!("{ART_PX}x{ART_PX}")))).unwrap_or_default();
                         (h.artist.map(|a| a.name).unwrap_or_default(), h.title, al, cover)
                     })
                     .collect::<Vec<_>>()
             })
     });
     let term = format!("{} {}", artist, title);
-    // 1200 px: sharp on any screen. (Covers are remembered on disk and per album, so most
-    // track changes don't wait for this at all.)
+    // ART_PX (800): sharp at the card's size, and quick. (Covers are remembered on disk
+    // and per album, so most track changes don't wait for this at all.)
     let itunes = http_get(&format!("https://itunes.apple.com/search?media=music&entity=song&limit=15&term={}", encode(&term)))
         .and_then(|b| serde_json::from_slice::<ItunesResp>(&b).ok())
-        .and_then(|r| pick(r.results.into_iter().map(|h| (h.artist, h.track, h.album, h.art.replace("100x100bb", "1200x1200bb"))).collect()));
+        .and_then(|r| pick(r.results.into_iter().map(|h| (h.artist, h.track, h.album, h.art.replace("100x100bb", &format!("{ART_PX}x{ART_PX}bb")))).collect()));
     let url = match itunes {
         Some(u) => u,
         None => pick(deezer.join().ok().flatten()?)?,

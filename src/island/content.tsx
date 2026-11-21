@@ -1139,7 +1139,7 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
   // A little softer than the bars, so the glow flows rather than flickers.
   const e = useSpring(energy, { stiffness: 900, damping: 55, mass: 0.5 });
   const scale = useTransform(e, (v) => 1.02 + v * 0.12);
-  const opacity = useTransform(e, (v) => 0.32 + v * 0.43);
+  const opacity = useTransform(e, (v) => 0.3 + v * 0.35);
   if (!src) return null;
   return (
     <motion.span

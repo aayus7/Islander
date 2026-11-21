@@ -1133,7 +1133,8 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
     const offs = levels.map((l) => l.on("change", update));
     return () => offs.forEach((off) => off());
   }, [energy]);
-  const e = useSpring(energy, { stiffness: 2400, damping: 70, mass: 0.35 });
+  // A little softer than the bars, so the glow flows rather than flickers.
+  const e = useSpring(energy, { stiffness: 900, damping: 55, mass: 0.5 });
   const scale = useTransform(e, (v) => 1.02 + v * 0.12);
   const opacity = useTransform(e, (v) => 0.32 + v * 0.53);
   if (!src) return null;

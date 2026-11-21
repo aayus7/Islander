@@ -82,6 +82,7 @@ export function useArtColor(src: string | null, seed = "") {
         // unreadable image → keep the per-app fallback
       }
       colorCache.set(src, out);
+      if (colorCache.size > 80) colorCache.delete(colorCache.keys().next().value!);
       if (alive) setColor(out);
     };
     img.onerror = () => alive && setColor(fallback);

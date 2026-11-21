@@ -7,8 +7,28 @@ import { useEffect, useState } from "react";
 import type { MediaSession } from "../bridge";
 import { call } from "./native";
 import { isVideoPlayer } from "./posters";
+import { toBlobUrl } from "./artref";
 
-const cache = new Map<string, string | null>(); // key → data: URL (null = none)
+// key → blob: URL of the large cover (null = none). Oldest first; capped so a long listening
+// session doesn't keep every cover in memory (the backend's disk cache still has them all).
+const cache = new Map<string, string | null>();
+const LIMIT = 30;
+
+function store(key: string, url: string | null) {
+  cache.set(key, url && url.startsWith("data:") ? toBlobUrl(url) ?? url : url);
+  while (cache.size > LIMIT) {
+    const [k, v] = cache.entries().next().value!;
+    cache.delete(k);
+    if (v?.startsWith("blob:")) URL.revokeObjectURL(v);
+  }
+}
+
+function touch(key: string) {
+  const v = cache.get(key);
+  if (v === undefined) return;
+  cache.delete(key);
+  cache.set(key, v);
+}
 const waiting = new Set<string>();
 const subs = new Set<() => void>();
 
@@ -26,8 +46,8 @@ export function requestHiRes(s: MediaSession | null | undefined) {
   if (!s || !key || cache.has(key) || waiting.has(key)) return;
   waiting.add(key);
   call<string | null>("hires_art", { artist: s.artist ?? "", title: s.title ?? "", album: s.album ?? "", imdb: s.imdb ?? null }, null)
-    .then((url) => cache.set(key, url || null))
-    .catch(() => cache.set(key, null))
+    .then((url) => store(key, url || null))
+    .catch(() => store(key, null))
     .finally(() => {
       waiting.delete(key);
       subs.forEach((f) => f());
@@ -48,6 +68,7 @@ export function useHiRes(s: MediaSession | null | undefined): { url: string | nu
   }, []);
   useEffect(() => requestHiRes(s), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!key) return { url: null, pending: false };
+  touch(key);
   return { url: cache.get(key) ?? null, pending: !cache.has(key) };
 }
 

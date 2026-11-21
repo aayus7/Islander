@@ -3,6 +3,7 @@
 //  - Mock:  fake data so the UI runs in a normal browser for design work
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { artRef } from "./lib/artref";
 import { mock } from "./mock";
 import { DEFAULT_SETTINGS, type AppSettings, type MonitorInfo } from "./settings-types";
 
@@ -115,7 +116,16 @@ const tauriBridge: Bridge = {
   isNative: true,
   windowLabel: isTauri ? tauriLabel() : "island",
   onMedia(cb) {
-    const un = wrapUnlisten(listen<MediaState>("media://update", (e) => cb(e.payload)));
+    const un = wrapUnlisten(
+      listen<MediaState>("media://update", (e) => {
+        const st = e.payload;
+        for (const x of st.sessions) {
+          x.artwork = artRef(x.artwork);
+          x.artworkWide = artRef(x.artworkWide);
+        }
+        cb(st);
+      }),
+    );
     invoke("media_refresh").catch(console.error);
     return un;
   },

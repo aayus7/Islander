@@ -89,24 +89,51 @@ export function MediaExpanded({
   // Just came back from the card: the shrinking cover keeps the sharp art until it lands,
   // and the rest of the player fades in behind it.
   const [returning, setReturning] = useState(false);
-  // Title and artist glide between their two places (beside the small cover / under the
-  // big one): measured just before the switch, then animated from there to where they land.
+  // The cover, title and artist glide between their two places (the player / the card):
+  // measured just before the switch, then animated from there to where they land. Done by
+  // hand rather than with shared layout animations, which start from a stale position when
+  // the island itself is moving (on the left/right edges it re-centres as it grows).
+  const coverEl = useRef<HTMLDivElement>(null);
   const titleEl = useRef<HTMLDivElement>(null);
   const artistEl = useRef<HTMLDivElement>(null);
-  const flipFrom = useRef<DOMRect[] | null>(null);
+  const flipFrom = useRef<{ cover: DOMRect; radius: number; text: DOMRect[] } | null>(null);
   const measureText = () => {
-    flipFrom.current = [titleEl.current, artistEl.current].every(Boolean)
-      ? [titleEl.current!.getBoundingClientRect(), artistEl.current!.getBoundingClientRect()]
+    const els = [coverEl.current, titleEl.current, artistEl.current];
+    flipFrom.current = els.every(Boolean)
+      ? {
+          cover: coverEl.current!.getBoundingClientRect(),
+          radius: parseFloat(getComputedStyle(coverEl.current!).borderTopLeftRadius) || 14,
+          text: [titleEl.current!.getBoundingClientRect(), artistEl.current!.getBoundingClientRect()],
+        }
       : null;
   };
   useLayoutEffect(() => {
     const from = flipFrom.current;
     flipFrom.current = null;
     if (!from) return;
+    const c = coverEl.current;
+    if (c) {
+      const to = c.getBoundingClientRect();
+      const sx = from.cover.width / to.width, sy = from.cover.height / to.height;
+      const r = parseFloat(getComputedStyle(c).borderTopLeftRadius) || 14;
+      c.style.transformOrigin = "0 0";
+      animate(
+        c,
+        {
+          x: [from.cover.left - to.left, 0],
+          y: [from.cover.top - to.top, 0],
+          scaleX: [sx, 1],
+          scaleY: [sy, 1],
+          // Keep the corners looking the same size while it's scaled.
+          borderRadius: [`${from.radius / sx}px / ${from.radius / sy}px`, `${r}px / ${r}px`],
+        },
+        COVER_SPRING,
+      );
+    }
     [titleEl.current, artistEl.current].forEach((el, i) => {
       if (!el) return;
       const to = el.getBoundingClientRect();
-      const dx = from[i].left - to.left, dy = from[i].top - to.top;
+      const dx = from.text[i].left - to.left, dy = from.text[i].top - to.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
       animate(el, { x: [dx, 0], y: [dy, 0] }, COVER_SPRING);
     });
@@ -248,10 +275,9 @@ export function MediaExpanded({
         }}
       >
         <motion.div
-          layoutId="mx-cover"
+          ref={coverEl}
           className="cover-big"
           style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}
-          transition={COVER_SPRING}
         >
           <ArtGlow src={session.artwork} playing={cur.playing} />
           {/* Turns to the next cover on a track change, like the small one. */}
@@ -299,7 +325,7 @@ export function MediaExpanded({
     <div className={`media-x${returning ? " returning" : ""}`} style={{ width, minHeight: height }}>
       <div className="row" style={{ gap: 14, height: artH }}>
         {/* Like iOS Music: the cover eases back a touch when paused, springs forward on play. */}
-        <motion.div layoutId="mx-cover" transition={COVER_SPRING} style={{ position: "relative", width: artW, height: artH, flexShrink: 0, borderRadius: tall || wide ? 10 : 14 }}>
+        <motion.div ref={coverEl} style={{ position: "relative", width: artW, height: artH, flexShrink: 0, borderRadius: tall || wide ? 10 : 14 }}>
           {returning && smallSrc && (
             <motion.img
               className="cover-hi cover-landing"

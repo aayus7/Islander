@@ -368,13 +368,18 @@ export function deviceVideo(name: string): string | null {
 /**
  * Some clips frame the product much smaller than the rest (AirPods Max fills about half the
  * frame the others do), so each gets a zoom and vertical nudge that evens out the visual size.
+ * `w` narrows the slot for products that are roughly square (the Max), so they don't sit in
+ * the middle of empty space meant for a pair of buds plus a case; the clip overflows the
+ * slot evenly on both sides, which is invisible because those edges are transparent.
  */
-const VIDEO_FIT: Record<string, { s: number; y: number }> = {
-  "airpods-max": { s: 1.5, y: 3.4 },
+type Fit = { s: number; y: number; w?: number };
+const VIDEO_FIT: Record<string, Fit> = {
+  "airpods-max": { s: 1.5, y: 3.4, w: 50 },
 };
+const fitOf = (src: string): Fit => VIDEO_FIT[src.replace(/^.*\/|\.webm$/g, "")] ?? { s: 1, y: 0 };
 
 function DeviceVideo({ src }: { src: string }) {
-  const fit = VIDEO_FIT[src.replace(/^.*\/|\.webm$/g, "")] ?? { s: 1, y: 0 };
+  const fit = fitOf(src);
   return (
     <motion.video
       className="dev-video"
@@ -398,7 +403,10 @@ export function DeviceActivity({ device }: { device: BtDevice }) {
   return (
     <div className="dev-act" style={{ width: DEVICE_SIZE.w, height: DEVICE_SIZE.h }}>
       {video ? (
-        <div className="dev-art wide">
+        <div
+          className="dev-art wide"
+          style={fitOf(video).w ? { width: fitOf(video).w, marginLeft: 0 } : undefined}
+        >
           <DeviceVideo src={video} />
         </div>
       ) : (

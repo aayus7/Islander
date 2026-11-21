@@ -47,12 +47,12 @@ const SMOOTHING = 0.6; // iOS "continuous corner" smoothing
 // outline animates; the content never moves while the shape morphs. (Centring
 // content inside an animating width makes text snap between pixels as the spring
 // settles — that was the "twitch" at the end of transitions.)
-const FRAME_W = 540; // room for a poster card ~half the screen tall
+const FRAME_W = 600; // room for the cover card (covers ~38 % of the screen tall)
 const FRAME_H = 920; // tall enough for the AI panel and the cover card (a 720 px poster, with its volume row)
 // The island's window (CSS px before the size scale; same as WIN_W/WIN_H in main.rs).
 // The frame sits in its middle; for each dock the whole layer is shifted so the island
 // hugs the matching window edge, and the window hugs that screen edge.
-const WIN_W = 640;
+const WIN_W = 700;
 const WIN_H = 1000;
 /** Extra room below the frame for the open island's shadow to fade out. */
 const SHADOW_PAD = WIN_H - FRAME_H; // also leaves room for the tab dock under the tallest island

@@ -50,7 +50,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 /// Island window size in logical px at size scale 1.0. Big enough for the largest
 /// expanded state plus the split bubble.
-const WIN_W: f64 = 640.0;
+const WIN_W: f64 = 700.0;
 const WIN_H: f64 = 1000.0; // tall enough for the AI panel and the cover card (posters ~half the screen) + tab dock; everything outside the island is click-through
 /// Extra px around the island that still counts as "on the island".
 const HIT_MARGIN: f64 = 4.0;

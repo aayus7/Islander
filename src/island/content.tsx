@@ -1076,15 +1076,16 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
   const r = size ? size.h / size.w : 1;
   const full = playerW - CARD_PAD * 2;
   const tall = r > 1.15;
-  // Posters: about 40 % of the screen's height (up to 576 px; the island grows to fit).
-  const posterH = typeof window !== "undefined" ? Math.min(576, Math.max(340, Math.round((window.screen?.height || 1080) * 0.4))) : 340;
-  let w = tall ? Math.round(posterH / r) : full;
+  const wide = r < 0.9;
+  // Posters and square covers: about 38 % of the screen's height (up to 547 px; the island
+  // grows to fit). Wide video thumbnails: the player's width.
+  const bigH = typeof window !== "undefined" ? Math.min(547, Math.max(340, Math.round((window.screen?.height || 1080) * 0.38))) : 340;
+  let w = tall ? Math.round(bigH / r) : wide ? full : bigH;
   if (!sharp && lo) {
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     w = Math.min(w, Math.round((lo.w / dpr) * 1.25));
   }
-  // Square and wide covers never taller than 340 px.
-  if (!tall && w * r > 340) w = Math.round(340 / r);
+  if (wide && w * r > 340) w = Math.round(340 / r);
   w = Math.max(170, w);
   const h = Math.round(w * r);
   const boxW = w + CARD_PAD * 2;

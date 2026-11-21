@@ -87,11 +87,6 @@ export function MediaExpanded({
 
   // ---- Cover card: click the cover and it grows to fill the player; click (or Esc) to go back.
   const [big, setBig] = useState(false);
-  // Swiping the big cover: where it's dragged to, and when a drag last ended (so the click
-  // that comes with letting go doesn't close the card).
-  const swipeX = useMotionValue(0);
-  const swipeOpacity = useTransform(swipeX, (v) => 1 - Math.min(0.6, Math.abs(v) / 700));
-  const draggedAt = useRef(0);
   // Just came back from the card: the shrinking cover keeps the sharp art until it lands,
   // and the rest of the player fades in behind it.
   const [returning, setReturning] = useState(false);
@@ -245,27 +240,6 @@ export function MediaExpanded({
     onCommand(`seek:${target}`);
   };
 
-  /** Swipe released: far or fast enough skips (the cover flies off that way and the next
-   *  one slides in from the other side), otherwise it springs back. */
-  const onSwipeEnd = (offset: number, velocity: number, w: number) => {
-    draggedAt.current = Date.now();
-    const dir = offset < -w * 0.25 || velocity < -600 ? 1 : offset > w * 0.25 || velocity > 600 ? -1 : 0;
-    const allowed = dir === 0 ? false : skipMode ? session.canSeek : dir === 1 ? session.canNext : session.canPrev;
-    if (!allowed) {
-      animate(swipeX, 0, { type: "spring", stiffness: 420, damping: 30 });
-      return;
-    }
-    animate(swipeX, -dir * w * 1.2, { duration: 0.16, ease: [0.4, 0, 1, 1] }).then(() => {
-      if (skipMode) skipBy(dir * 10);
-      else {
-        flipDir.current = 0; // the slide is the animation: no turn on top of it
-        onCommand(dir === 1 ? "next" : "prev");
-      }
-      swipeX.set(dir * w * 0.5);
-      animate(swipeX, 0, { type: "spring", stiffness: 320, damping: 30 });
-    });
-  };
-
   // Previous / play-pause / next (video players: back 10 / forward 10), shared by the
   // player and the cover card.
   const transport = (
@@ -322,7 +296,6 @@ export function MediaExpanded({
         title="Back to the player"
         onClick={(e) => {
           e.stopPropagation();
-          if (Date.now() - draggedAt.current < 350) return; // the end of a swipe, not a click
           back();
         }}
       >
@@ -334,17 +307,6 @@ export function MediaExpanded({
           style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}
         >
           {/* Apple TV-style: leans toward the cursor, catches the light, springs back. */}
-          {/* Swipe it sideways to skip. */}
-          <motion.div
-            className="swipe"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.5}
-            dragMomentum={false}
-            style={{ x: swipeX, opacity: swipeOpacity }}
-            onDragStart={() => (draggedAt.current = Date.now())}
-            onDragEnd={(_, info) => onSwipeEnd(info.offset.x, info.velocity.x, card.w)}
-          >
           <MagnetCover w={card.w} h={card.h} radius={CARD_RADIUS} playing={cur.playing}>
             <CardGlow src={(wideArt ? null : hi.url) ?? cardLo} radius={CARD_RADIUS} />
             {/* Turns to the next cover on a track change, like the small one. */}
@@ -369,7 +331,6 @@ export function MediaExpanded({
               </div>
             </FlipArt>
           </MagnetCover>
-          </motion.div>
         </motion.div>
         <motion.div
           className="cover-text"

@@ -1132,7 +1132,7 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
   w = Math.max(170, w);
   const h = Math.round(w * r);
   const boxW = w + CARD_PAD * 2;
-  const total = CARD_PAD + h + 14 + 44 + 14 + 18 + 6 + 46 + 18; // top gap, cover, gap, title + artist, gap, scrubber, gap, controls, bottom
+  const total = CARD_PAD + h + 20 + 44 + 14 + 18 + 6 + 46 + 18; // top gap, cover, gap (14 + 6), title + artist, gap, scrubber, gap, controls, bottom
   return { w, h, boxW, extra: Math.max(0, total - base) };
 }
 

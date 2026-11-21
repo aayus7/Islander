@@ -13,6 +13,10 @@ pub struct MediaSession {
     pub artist: String,
     pub album: String,
     pub artwork: Option<String>,
+    /// The artwork at its real (wide) shape when `artwork` is a square crop of it, for the
+    /// cover card: from extension 1.6+, else the thumbnail Windows has for that browser.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artwork_wide: Option<String>,
     /// App or site logo as a data: URL (None → the UI draws a letter badge).
     pub icon: Option<String>,
     pub playing: bool,
@@ -161,8 +165,19 @@ fn merge_extension(mut sessions: Vec<MediaSession>) -> Vec<MediaSession> {
         return sessions;
     }
     let covered: std::collections::HashSet<String> = ext.iter().map(|(b, _)| browser_exe(b).to_string()).collect();
+    // The browser's own (Windows) sessions are dropped in favour of the extension's, but
+    // their thumbnail keeps the video's real wide shape (the extension sends a square crop):
+    // remember it by title for the cover card.
+    let win_thumbs: Vec<(String, String, String)> = sessions
+        .iter()
+        .filter(|s| s.source == "windows" && covered.contains(&exe_for_id(&s.id)))
+        .filter_map(|s| s.artwork.clone().map(|a| (exe_for_id(&s.id), s.title.to_lowercase(), a)))
+        .collect();
     sessions.retain(|s| s.source != "windows" || !covered.contains(&exe_for_id(&s.id)));
     for (b, e) in ext {
+        let exe = browser_exe(&b).to_string();
+        let title = e.title.to_lowercase();
+        let win_wide = win_thumbs.iter().find(|(x, t, _)| *x == exe && !t.is_empty() && (title.contains(t.as_str()) || t.contains(title.as_str()))).map(|w| w.2.clone());
         sessions.push(MediaSession {
             id: format!("ext:{b}:{}", e.key),
             app: if e.site_name.is_empty() { browser_pretty(&b) } else { e.site_name.clone() },
@@ -170,6 +185,7 @@ fn merge_extension(mut sessions: Vec<MediaSession>) -> Vec<MediaSession> {
             artist: e.artist,
             album: e.album,
             artwork: e.artwork,
+            artwork_wide: e.artwork_wide.or(win_wide),
             // Site icon from the extension; if the site has none, the browser's own logo.
             icon: e.icon.or_else(|| imp::exe_icon(browser_exe(&b))),
             playing: e.playing,
@@ -593,6 +609,7 @@ mod imp {
             artist,
             album,
             artwork,
+            artwork_wide: None,
             playing,
             can_next,
             can_prev,

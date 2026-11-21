@@ -13,6 +13,8 @@ export interface MediaSession {
   artist: string;
   album: string;
   artwork: string | null; // data: URL
+  /** The artwork at its real wide shape when `artwork` is a square crop (video thumbnails). */
+  artworkWide?: string | null;
   /** App or site logo (data: URL); null → a letter badge is drawn. */
   icon?: string | null;
   playing: boolean;

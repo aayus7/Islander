@@ -24,6 +24,8 @@ pub struct ExtSession {
     pub artist: String,
     pub album: String,
     pub artwork: Option<String>,
+    /// Wide artwork (video thumbnail) uncropped, for the cover card (extension 1.6+).
+    pub artwork_wide: Option<String>,
     /// Site icon (favicon) as a data: URL.
     pub icon: Option<String>,
     pub site_name: String,
@@ -47,6 +49,7 @@ impl Default for ExtSession {
             artist: String::new(),
             album: String::new(),
             artwork: None,
+            artwork_wide: None,
             icon: None,
             site_name: String::new(),
             playing: false,

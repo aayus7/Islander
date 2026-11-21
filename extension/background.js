@@ -34,7 +34,10 @@ api.runtime.onMessage.addListener((msg, sender) => {
   } else {
     frames.set(key, { tabId, frameId, state: msg.state, at: Date.now() });
     if (!audible.has(tabId)) audible.set(tabId, !!sender.tab.audible);
-    if (msg.state.artworkUrl) loadArtwork(msg.state.artworkUrl, msg.state.artworkFallback, true);
+    if (msg.state.artworkUrl) {
+      loadArtwork(msg.state.artworkUrl, msg.state.artworkFallback, true);
+      loadWide(msg.state.artworkUrl, msg.state.artworkFallback);
+    }
     if (msg.state.iconUrl) loadArtwork(msg.state.iconUrl);
   }
   connect();
@@ -103,6 +106,33 @@ async function loadArtwork(url, fallback, square = false) {
   pushSoon();
 }
 
+/**
+ * Wide artwork (video thumbnails) uncropped, up to 960 px wide, for the island's big cover
+ * card. Square artwork gets none (the square copy above already is the whole picture).
+ */
+const wide = new Map(); // url → data: URL ("" = not wide / failed, null = loading)
+async function loadWide(url, fallback) {
+  if (wide.has(url) || url.startsWith("data:")) return;
+  wide.set(url, null);
+  try {
+    let res = await fetch(url, { credentials: "omit" });
+    if (!res.ok && fallback) res = await fetch(fallback, { credentials: "omit" });
+    if (!res.ok) throw new Error(res.status);
+    const bmp = await createImageBitmap(await res.blob());
+    if (bmp.width < bmp.height * 1.2) throw new Error("not wide");
+    const s = Math.min(1, 960 / bmp.width);
+    const c = new OffscreenCanvas(Math.round(bmp.width * s), Math.round(bmp.height * s));
+    const ctx = c.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    wide.set(url, await blobToDataUrl(await c.convertToBlob({ type: "image/jpeg", quality: 0.9 })));
+  } catch {
+    wide.set(url, "");
+  }
+  if (wide.size > 40) wide.delete(wide.keys().next().value);
+  pushSoon();
+}
+
 async function blobToDataUrl(blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let bin = "";
@@ -130,6 +160,7 @@ function sessions() {
       artist: s.artist,
       album: s.album,
       artwork: a || null,
+      artworkWide: (s.artworkUrl && wide.get(s.artworkUrl)) || null,
       icon: icon || null,
       siteName: s.siteName,
       playing: s.playing,

@@ -15,8 +15,9 @@ const subs = new Set<() => void>();
 export function hiresKey(s: MediaSession | null | undefined): string | null {
   if (!s) return null;
   if (s.imdb) return `imdb:${s.imdb}`;
-  // A video player without a matched movie has nothing to look up.
-  if (isVideoPlayer(s) || !s.title || !s.artist || s.title === "Advertisement") return null;
+  // A video player without a matched movie has nothing to look up; nor does a video in the
+  // browser (its own wide thumbnail is the cover, not the song's album art).
+  if (s.artworkWide || isVideoPlayer(s) || !s.title || !s.artist || s.title === "Advertisement") return null;
   return `m:${s.artist}\u0001${s.title}\u0001${s.album ?? ""}`;
 }
 

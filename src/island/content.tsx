@@ -120,8 +120,13 @@ export function MediaExpanded({
   };
   const hi = useHiRes(session);
   const hiSize = useArtSize(hi.url);
+  // A video's thumbnail at its real wide shape (the player shows a square crop of it).
+  const wideSize = useArtSize(session?.artworkWide ?? null);
+  const wideArt = session?.artworkWide && wideSize && wideSize.w > wideSize.h * 1.2 ? session.artworkWide : null;
+  const cardLo = wideArt ?? session?.artwork ?? null;
   const loSize = useArtSize(session?.artwork ?? null);
-  const card = coverCard(hi.url ? hiSize : loSize, !!hi.url || hi.pending, loSize, width, height);
+  const cardLoSize = wideArt ? wideSize : loSize;
+  const card = hi.url && !wideArt ? coverCard(hiSize, true, hiSize, width, height) : coverCard(cardLoSize, !wideArt && hi.pending, cardLoSize, width, height);
   useEffect(() => {
     if (!big) return;
     const esc = (e: KeyboardEvent) => e.key === "Escape" && back();
@@ -248,9 +253,9 @@ export function MediaExpanded({
           {/* Turns to the next cover on a track change, like the small one. */}
           <FlipArt trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={card.w} height={card.h}>
             <div className="cover-face" style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}>
-              {session.artwork && <img className="cover-lo" src={session.artwork} alt="" draggable={false} />}
+              {cardLo && <img className="cover-lo" src={cardLo} alt="" draggable={false} />}
               <AnimatePresence>
-                {hi.url && (
+                {hi.url && !wideArt && (
                   <motion.img
                     key={hi.url}
                     className="cover-hi"

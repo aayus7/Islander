@@ -184,9 +184,9 @@ static ART_CACHE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(No
 
 /// Size of the large music covers.
 const ART_PX: u32 = 600;
-/// Width of the large movie/series posters: the original for nearly all of them (they're
-/// shown about half the screen tall), without the rare multi-megabyte 5000 px ones.
-const POSTER_PX: u32 = 2000;
+/// Width of the large movie/series posters: ~2-3x what the card shows, so it's sharp but
+/// scales down cleanly (a 2000 px original shrunk ~5x looks harsh and over-sharpened).
+const POSTER_PX: u32 = 1000;
 
 #[tauri::command]
 pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, album: String, imdb: Option<String>) -> Option<String> {
@@ -198,9 +198,17 @@ pub async fn hires_art(app: tauri::AppHandle, artist: String, title: String, alb
     let dir = {
         use tauri::Manager;
         app.path().app_cache_dir().ok().map(|d| {
-            // Covers saved at another size are dropped (one folder per size).
-            let _ = std::fs::remove_dir_all(d.join("covers"));
-            d.join(format!("covers-{ART_PX}"))
+            // Covers saved at other sizes are dropped (one folder per size).
+            let here = format!("covers-{ART_PX}-{POSTER_PX}");
+            if let Ok(rd) = std::fs::read_dir(&d) {
+                for e in rd.flatten() {
+                    let n = e.file_name().to_string_lossy().to_string();
+                    if n.starts_with("covers") && n != here {
+                        let _ = std::fs::remove_dir_all(e.path());
+                    }
+                }
+            }
+            d.join(here)
         })
     };
     let found = tauri::async_runtime::spawn_blocking(move || {
@@ -290,7 +298,7 @@ struct ImdbImage {
 
 /// The title's poster from IMDb's image server, POSTER_PX wide. IMDb's search suggestions
 /// (free, no key; what imdb.com's own search box uses) give the original image, and its
-/// URL takes a size: "…_V1_.jpg" → "…_V1_UX2000_.jpg".
+/// URL takes a size: "…_V1_.jpg" → "…_V1_UX1000_.jpg".
 fn imdb_poster(id: &str) -> Option<Vec<u8>> {
     let body = http_get(&format!("https://v3.sg.media-imdb.com/suggestion/t/{id}.json"))?;
     let hit = serde_json::from_slice::<ImdbSuggest>(&body).ok()?.d.into_iter().find(|h| h.id == id)?;

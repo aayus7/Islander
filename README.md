@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/VLC-partial-1c1c1e?style=flat-square&logo=vlcmediaplayer&logoColor=ff8800" alt="VLC (partial)">
   <img src="https://img.shields.io/badge/Mister%20Download%20Manager-1c1c1e?style=flat-square" alt="Mister Download Manager">
   <img src="https://img.shields.io/badge/IDM-1c1c1e?style=flat-square" alt="Internet Download Manager">
-  <img src="https://img.shields.io/badge/LocalSend-1c1c1e?style=flat-square" alt="LocalSend">
+  <img src="https://img.shields.io/badge/LocalSend-1c1c1e?style=flat-square&logo=localsend&logoColor=33a8f5" alt="LocalSend">
   <img src="https://img.shields.io/badge/AirPods%20%26%20Beats-1c1c1e?style=flat-square&logo=apple&logoColor=white" alt="AirPods and Beats">
   <img src="https://img.shields.io/badge/Chrome%20%C2%B7%20Edge%20%C2%B7%20Firefox-1c1c1e?style=flat-square&logo=googlechrome&logoColor=white" alt="Chrome, Edge and Firefox (browser extension)">
 </p>

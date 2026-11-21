@@ -305,7 +305,7 @@ export function MediaExpanded({
           style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}
         >
           {/* Apple TV-style: leans toward the cursor, catches the light, springs back. */}
-          <MagnetCover w={card.w} h={card.h} radius={CARD_RADIUS}>
+          <MagnetCover w={card.w} h={card.h} radius={CARD_RADIUS} playing={cur.playing}>
             <CardGlow src={(wideArt ? null : hi.url) ?? cardLo} radius={CARD_RADIUS} />
             {/* Turns to the next cover on a track change, like the small one. */}
             <FlipArt trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={card.w} height={card.h}>
@@ -1154,7 +1154,7 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
  * few degrees in 3D), shifts a few pixels its way and a soft shine follows across it; when
  * the cursor leaves it springs back flat with a little wobble; pressing pushes it in.
  */
-function MagnetCover({ w, h, radius, children }: { w: number; h: number; radius: number; children: React.ReactNode }) {
+function MagnetCover({ w, h, radius, playing, children }: { w: number; h: number; radius: number; playing: boolean; children: React.ReactNode }) {
   const px = useMotionValue(0); // -0.5 … 0.5 across the cover
   const py = useMotionValue(0);
   const over = useMotionValue(0);
@@ -1181,7 +1181,16 @@ function MagnetCover({ w, h, radius, children }: { w: number; h: number; radius:
     over.set(0);
   };
   return (
-    <div className="magnet" style={{ width: w, height: h }} onPointerMove={move} onPointerLeave={leave}>
+    // Like the player's small cover: eases back a touch when paused, springs forward on play.
+    <motion.div
+      className="magnet"
+      style={{ width: w, height: h }}
+      onPointerMove={move}
+      onPointerLeave={leave}
+      initial={false}
+      animate={{ scale: playing ? 1 : 0.93 }}
+      transition={{ type: "spring", stiffness: 260, damping: 17, mass: 0.9 }}
+    >
       <motion.div
         className="magnet-tilt"
         style={{ width: w, height: h, rotateX, rotateY, x, y, borderRadius: radius }}
@@ -1191,6 +1200,6 @@ function MagnetCover({ w, h, radius, children }: { w: number; h: number; radius:
         {children}
         <motion.span className="magnet-shine" style={{ backgroundImage: glare, opacity: shine, borderRadius: radius }} />
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

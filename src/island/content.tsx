@@ -1138,8 +1138,8 @@ function CardGlow({ src, radius }: { src: string | null; radius: number }) {
   }, [energy]);
   // Quick to swell, a softer fall back.
   const e = useSpring(energy, { stiffness: 320, damping: 26, mass: 0.5 });
-  const scale = useTransform(e, (v) => 1.02 + v * 0.12);
-  const opacity = useTransform(e, (v) => 0.32 + v * 0.68);
+  const scale = useTransform(e, (v) => 1.02 + v * 0.09);
+  const opacity = useTransform(e, (v) => 0.32 + v * 0.38); // peaks at 0.7: full brightness looks harsh
   if (!src) return null;
   return (
     <motion.span

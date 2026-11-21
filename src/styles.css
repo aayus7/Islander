@@ -101,7 +101,8 @@ button { font: inherit; color: inherit; }
 .magnet { position: relative; perspective: 900px; }
 /* Living background behind the cover card */
 .cover-card > :not(.living-bg) { position: relative; z-index: 1; }
-.living-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+/* Reaches below the card too, behind the volume row when it shows (the island clips the rest). */
+.living-bg { position: absolute; inset: 0 0 -48px 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .living-layers { position: absolute; inset: 0; }
 .lb { position: absolute; width: 130%; height: 130%; background-size: cover; background-position: center; filter: blur(48px) saturate(1.6); will-change: transform; }
 .lb1 { left: -35%; top: -35%; animation: lb-a 26s ease-in-out infinite alternate; }

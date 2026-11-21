@@ -1,4 +1,5 @@
-import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useSpring, useTransform } from "motion/react";
+import { levels, startAudio } from "../lib/audio";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { bridge, type MediaAction, type MediaSession, type OutputDevice } from "../bridge";
 import { fmtTime, livePosition, useArtColor, useNow } from "../lib/hooks";
@@ -303,7 +304,7 @@ export function MediaExpanded({
           className="cover-big"
           style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}
         >
-          <ArtGlow src={session.artwork} playing={cur.playing} />
+          <CardGlow src={(wideArt ? null : hi.url) ?? cardLo} radius={CARD_RADIUS} />
           {/* Turns to the next cover on a track change, like the small one. */}
           <FlipArt trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={card.w} height={card.h}>
             <div className="cover-face" style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}>
@@ -1079,9 +1080,9 @@ function Skip10Icon({ size = 30, dir }: { size?: number; dir: 1 | -1 }) {
 const COVER_SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.9 };
 
 /** Gap around the cover in the card: the same on the top and both sides. */
-const CARD_PAD = 16;
+const CARD_PAD = 20;
 /** The cover's corners follow the island's (46) at that distance. */
-const CARD_RADIUS = 30;
+const CARD_RADIUS = 26;
 
 /**
  * Size of the cover card for an image of `size` (natural pixels). Square and wide covers
@@ -1110,4 +1111,35 @@ function coverCard(size: { w: number; h: number } | null, sharp: boolean, lo: { 
   const boxW = w + CARD_PAD * 2;
   const total = CARD_PAD + h + 14 + 44 + 14 + 18 + 6 + 46 + 18; // top gap, cover, gap, title + artist, gap, scrubber, gap, controls, bottom
   return { w, h, boxW, extra: Math.max(0, total - base) };
+}
+
+/**
+ * The cover card's glow: the cover's own colours, blurred behind it, swelling a little on
+ * the beat and settling when the music is quiet (or paused). Driven by the same audio
+ * levels as the waveform, through motion values, so it never re-renders React.
+ */
+function CardGlow({ src, radius }: { src: string | null; radius: number }) {
+  useEffect(startAudio, []);
+  const energy = useMotionValue(0);
+  useEffect(() => {
+    const update = () => {
+      const v = levels.map((l) => l.get());
+      // Mostly the low end (the beat), a little of the rest.
+      const low = (v[0] + v[1]) / 2;
+      const rest = v.slice(2).reduce((a, b) => a + b, 0) / Math.max(1, v.length - 2);
+      energy.set(Math.min(1, low * 0.7 + rest * 0.3));
+    };
+    const offs = levels.map((l) => l.on("change", update));
+    return () => offs.forEach((off) => off());
+  }, [energy]);
+  const e = useSpring(energy, { stiffness: 260, damping: 22, mass: 0.6 });
+  const scale = useTransform(e, (v) => 1.03 + v * 0.09);
+  const opacity = useTransform(e, (v) => 0.4 + v * 0.55);
+  if (!src) return null;
+  return (
+    <motion.span
+      className="card-glow"
+      style={{ backgroundImage: `url("${src}")`, borderRadius: radius + 6, scale, opacity }}
+    />
+  );
 }

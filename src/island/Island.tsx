@@ -266,7 +266,7 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
     hoverTimer.current = window.setTimeout(() => {
       setHover(v);
       if (!v) setClickOpen(false);
-    }, v ? 70 : 240);
+    }, v ? 45 : 200); // open almost at once; a short grace before closing so passing edges don't flicker
   }, []);
   useEffect(() => bridge.onHover(setHoverDelayed), [setHoverDelayed]);
 
@@ -1040,14 +1040,16 @@ export function Island({ session, sessions, onCommand, onSelect }: Props) {
               : `idle-${idleStyle}`;
 
   const contentVariants = {
-    initial: (d: number) => ({ opacity: 0, scale: 0.92, filter: "blur(10px)", x: mode === "expanded" ? d * 30 : 0 }),
+    // New content starts resolving right away (it used to wait ~70 ms), the old one leaves a
+    // bit quicker: the island answers the moment you reach it instead of after a beat.
+    initial: (d: number) => ({ opacity: 0, scale: 0.93, filter: "blur(8px)", x: mode === "expanded" ? d * 28 : 0 }),
     animate: {
       opacity: 1, scale: 1, filter: "blur(0px)", x: 0,
-      transition: { ...springs.content, delay: 0.04, opacity: { duration: 0.24, delay: 0.07 }, filter: { duration: 0.3, delay: 0.04 } },
+      transition: { ...springs.content, delay: 0.015, opacity: { duration: 0.2, delay: 0.03, ease: [0.2, 0, 0, 1] as const }, filter: { duration: 0.26, delay: 0.015, ease: [0.2, 0, 0, 1] as const } },
     },
     exit: (d: number) => ({
-      opacity: 0, scale: 0.92, filter: "blur(10px)", x: mode === "expanded" ? -d * 30 : 0,
-      transition: { duration: 0.18, ease: [0.4, 0, 1, 1] as const },
+      opacity: 0, scale: 0.93, filter: "blur(8px)", x: mode === "expanded" ? -d * 28 : 0,
+      transition: { duration: 0.15, ease: [0.4, 0, 1, 1] as const },
     }),
   };
 

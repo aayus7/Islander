@@ -41,7 +41,8 @@ type Pair = [response: number, dampingFraction: number];
 // Expand is slightly underdamped (a soft overshoot); collapse is a little bouncier
 // sideways so the pill briefly over-shrinks before settling.
 const PRESETS: Record<AnimStyle, Record<keyof SpringSet, Pair>> = {
-  default: { expand: [0.46, 0.76], collapse: [0.42, 0.8], content: [0.38, 0.88], bubble: [0.5, 0.66], press: [0.25, 0.7] },
+  // Same character as before (same damping), a touch quicker to respond.
+  default: { expand: [0.42, 0.76], collapse: [0.38, 0.8], content: [0.34, 0.88], bubble: [0.46, 0.66], press: [0.2, 0.7] },
   bouncy: { expand: [0.5, 0.64], collapse: [0.46, 0.68], content: [0.4, 0.8], bubble: [0.55, 0.56], press: [0.28, 0.55] },
   smooth: { expand: [0.5, 0.92], collapse: [0.46, 0.95], content: [0.42, 0.96], bubble: [0.5, 0.86], press: [0.25, 0.9] },
   snappy: { expand: [0.32, 0.8], collapse: [0.3, 0.86], content: [0.28, 0.9], bubble: [0.36, 0.72], press: [0.2, 0.75] },

@@ -248,7 +248,7 @@ export function MediaExpanded({
           {/* Turns to the next cover on a track change, like the small one. */}
           <FlipArt trackKey={`${session.id}|${session.title}|${session.artist}`} dir={flipDir} size={card.w} height={card.h}>
             <div className="cover-face" style={{ width: card.w, height: card.h, borderRadius: CARD_RADIUS }}>
-              {session.artwork && <img className="cover-lo" src={session.artwork} alt="" draggable={false} style={{ filter: hi.url ? "none" : "blur(3px)" }} />}
+              {session.artwork && <img className="cover-lo" src={session.artwork} alt="" draggable={false} />}
               <AnimatePresence>
                 {hi.url && (
                   <motion.img
@@ -257,9 +257,9 @@ export function MediaExpanded({
                     src={hi.url}
                     alt=""
                     draggable={false}
-                    initial={{ opacity: 0, filter: "blur(6px)" }}
-                    animate={{ opacity: 1, filter: "blur(0px)" }}
-                    transition={{ duration: 0.35, ease: "easeOut" }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
                   />
                 )}
               </AnimatePresence>

@@ -1009,9 +1009,9 @@ function Skip10Icon({ size = 30, dir }: { size?: number; dir: 1 | -1 }) {
 const COVER_SPRING = { type: "spring" as const, stiffness: 300, damping: 30, mass: 0.9 };
 
 /** Gap around the cover in the card: the same on the top and both sides. */
-const CARD_PAD = 22;
+const CARD_PAD = 16;
 /** The cover's corners follow the island's (46) at that distance. */
-const CARD_RADIUS = 24;
+const CARD_RADIUS = 30;
 
 /**
  * Size of the cover card for an image of `size` (natural pixels). Square and wide covers
